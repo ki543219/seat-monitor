@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Seat Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#f4f5f2; --card:#ffffff; --ink:#1d2421; --muted:#5f6a64; --rule:#d8dcd5;
+  --occupied:#2f7a5a; --occupied-bg:#e3f1ea;
+  --away:#b2562a;     --away-bg:#f7e7dc;
+  --empty:#6b7570;    --empty-bg:#eceeea;
+  --alert:#b3261e;
+  --sans:"IBM Plex Sans KR",system-ui,"Malgun Gothic",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#121614; --card:#1a201d; --ink:#e7ebe6; --muted:#9aa59f; --rule:#323b36;
+  --occupied:#5fbf93; --occupied-bg:#1d3329; --away:#e08a5c; --away-bg:#3a271c;
+  --empty:#9aa59f; --empty-bg:#232a26; --alert:#ff8a80}}
+:root[data-theme="dark"]{
+  --bg:#121614; --card:#1a201d; --ink:#e7ebe6; --muted:#9aa59f; --rule:#323b36;
+  --occupied:#5fbf93; --occupied-bg:#1d3329; --away:#e08a5c; --away-bg:#3a271c;
+  --empty:#9aa59f; --empty-bg:#232a26; --alert:#ff8a80}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5}
+main{max-width:960px;margin:0 auto;padding:28px 16px 48px;display:grid;gap:28px}
+header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+h1{margin:0;font-size:24px;letter-spacing:-.01em}
+h2{margin:0 0 10px;font-size:15px;font-weight:500;color:var(--muted)}
+.meta{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.meta.err{color:var(--alert)}
+
+.seats{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.seat{background:var(--card);border:1px solid var(--rule);border-left:6px solid var(--c);padding:18px 20px;display:grid;gap:6px}
+.seat .id{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.seat .state{font-size:26px;font-weight:700;color:var(--c)}
+.seat .since{font-size:14px;color:var(--muted)}
+.seat .alert{font-size:13px;font-weight:500;color:var(--alert)}
+.occupied{--c:var(--occupied);--cb:var(--occupied-bg)}
+.away{--c:var(--away);--cb:var(--away-bg)}
+.empty,.unknown{--c:var(--empty);--cb:var(--empty-bg)}
+
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--rule);font-size:14px}
+th,td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--rule)}
+th{font-weight:500;color:var(--muted);font-size:12px}
+td.num{font-family:var(--mono);text-align:right}
+th.num{text-align:right}
+.tag{display:inline-block;padding:1px 8px;font-size:12px;background:var(--cb);color:var(--c)}
+.scroll{overflow-x:auto}
+.empty-msg{color:var(--muted);font-size:14px;padding:12px 0}
+
+/* Badge mode: one seat, full screen, for screen sharing / OBS */
+body.badge{display:grid;place-items:center;min-height:100vh;background:var(--cb,var(--bg))}
+body.badge main{display:none}
+#badge{display:none;text-align:center;padding:16px}
+body.badge #badge{display:block}
+#badge .state{font-size:clamp(40px,12vw,140px);font-weight:700;color:var(--c);line-height:1.1}
+#badge .since{font-size:clamp(16px,3vw,32px);color:var(--muted);margin-top:12px}
+#badge .id{font-family:var(--mono);font-size:clamp(12px,1.6vw,18px);color:var(--muted);margin-top:8px}
+#badge .alert{font-size:clamp(16px,2.6vw,28px);color:var(--alert);font-weight:500;margin-top:10px}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Seat Monitor</h1>
+    <span class="meta" id="status">불러오는 중…</span>
+  </header>
+  <section>
+    <h2>현재 상태</h2>
+    <div class="seats" id="seats"></div>
+  </section>
+  <section>
+    <h2>오늘 요약</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>좌석</th><th class="num">사용 (분)</th><th class="num">자리 비움 (분)</th><th class="num">자리 비움 횟수</th><th class="num">장시간 알림</th></tr></thead>
+      <tbody id="daily"></tbody>
+    </table></div>
+  </section>
+  <section>
+    <h2>최근 기록</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>시각</th><th>좌석</th><th>변화</th><th class="num">이전 상태 지속</th></tr></thead>
+      <tbody id="events"></tbody>
+    </table></div>
+  </section>
+</main>
+<div id="badge"></div>
+
+<script>
+// Publishable key: read/insert only, safe to ship in a public page.
+const SUPABASE_URL = "https://haivgsjhzpzzfctvtpht.supabase.co";
+const SUPABASE_KEY = "sb_publishable__OgkuoZJ0eeN8WluGW_MnA_r-Uy7p2N";
+const REFRESH_MS = 5000;
+
+const LABEL = { occupied: "자리에 있음", away: "자리 비움", empty: "빈 자리", unknown: "확인 중" };
+const params = new URLSearchParams(location.search);
+const badgeSeat = params.get("badge");
+if (badgeSeat) document.body.classList.add("badge");
+
+let seats = [];  // [{seat_id, state, since, alert}]
+
+async function api(path) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: { apikey: SUPABASE_KEY } });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function fmtDuration(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  if (h) return `${h}시간 ${m}분`;
+  if (m) return `${m}분 ${s}초`;
+  return `${s}초`;
+}
+
+const fmtTime = ts => new Date(ts).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const todayKST = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
+
+// Latest 'changed' event gives the current state; an away_too_long after it means the alert fired.
+function currentSeats(events) {
+  const bySeat = new Map();
+  for (const e of events) {  // newest first
+    const s = bySeat.get(e.seat_id) || { seat_id: e.seat_id, alert: false };
+    if (s.state) continue;
+    if (e.kind === "away_too_long") s.alert = true;
+    else { s.state = e.to_state; s.since = new Date(e.ts); }
+    bySeat.set(e.seat_id, s);
+  }
+  return [...bySeat.values()].filter(s => s.state).sort((a, b) => a.seat_id.localeCompare(b.seat_id));
+}
+
+function renderSeats() {
+  const now = Date.now();
+  document.getElementById("seats").innerHTML = seats.length ? seats.map(s => `
+    <article class="seat ${esc(s.state)}">
+      <span class="id">${esc(s.seat_id)}</span>
+      <span class="state">${LABEL[s.state] || esc(s.state)}</span>
+      <span class="since">${fmtDuration((now - s.since) / 1000)}째 · ${fmtTime(s.since)}부터</span>
+      ${s.alert && s.state === "away" ? '<span class="alert">⚠ 장시간 자리 비움 (짐만 있음)</span>' : ""}
+    </article>`).join("") : '<p class="empty-msg">아직 기록이 없습니다. ESP32가 켜져 있는지 확인하세요.</p>';
+
+  if (badgeSeat) {
+    const s = seats.find(x => x.seat_id === badgeSeat);
+    const el = document.getElementById("badge");
+    document.body.className = "badge " + (s ? s.state : "unknown");
+    el.innerHTML = s ? `
+      <div class="state">${LABEL[s.state] || esc(s.state)}</div>
+      <div class="since">${fmtDuration((now - s.since) / 1000)}째</div>
+      ${s.alert && s.state === "away" ? '<div class="alert">장시간 자리 비움</div>' : ""}
+      <div class="id">${esc(s.seat_id)}</div>`
+      : `<div class="state">확인 중</div><div class="id">${esc(badgeSeat)} 기록 없음</div>`;
+  }
+}
+
+function renderDaily(rows) {
+  document.getElementById("daily").innerHTML = rows.length ? rows.map(r => `
+    <tr><td>${esc(r.seat_id)}</td><td class="num">${r.occupied_min ?? 0}</td><td class="num">${r.away_min ?? 0}</td>
+    <td class="num">${r.away_count}</td><td class="num">${r.away_alerts}</td></tr>`).join("")
+    : '<tr><td colspan="5" class="empty-msg">오늘 기록 없음</td></tr>';
+}
+
+function renderEvents(events) {
+  document.getElementById("events").innerHTML = events.slice(0, 20).map(e => {
+    const change = e.kind === "away_too_long"
+      ? '<span class="tag away">장시간 자리 비움 알림</span>'
+      : `<span class="tag ${esc(e.from_state)}">${LABEL[e.from_state] || esc(e.from_state)}</span> → <span class="tag ${esc(e.to_state)}">${LABEL[e.to_state] || esc(e.to_state)}</span>`;
+    return `<tr><td class="num" style="text-align:left">${fmtTime(e.ts)}</td><td>${esc(e.seat_id)}</td><td>${change}</td><td class="num">${fmtDuration(e.duration_s)}</td></tr>`;
+  }).join("") || '<tr><td colspan="4" class="empty-msg">기록 없음</td></tr>';
+}
+
+async function refresh() {
+  const status = document.getElementById("status");
+  try {
+    const [events, daily] = await Promise.all([
+      api("seat_events?select=seat_id,ts,kind,from_state,to_state,duration_s&order=ts.desc&limit=300"),
+      api(`seat_daily?day=eq.${todayKST()}&order=seat_id`),
+    ]);
+    seats = currentSeats(events);
+    renderSeats();
+    renderDaily(daily);
+    renderEvents(events);
+    status.className = "meta";
+    status.textContent = `${fmtTime(new Date())} 갱신 · ${REFRESH_MS / 1000}초마다`;
+  } catch (err) {
+    status.className = "meta err";
+    status.textContent = `불러오기 실패 (${err.message}) — supabase/schema.sql의 읽기 정책을 실행했는지 확인`;
+  }
+}
+
+refresh();
+setInterval(refresh, REFRESH_MS);
+setInterval(renderSeats, 1000);  // tick the "n분째" counters between fetches
+</script>
+</body>
+</html>

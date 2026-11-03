@@ -1,5 +1,5 @@
--- Seat monitor event log. Devices insert with the publishable (anon) key; nobody can read
--- or modify rows with that key. Read data from the Supabase dashboard / service role.
+-- Seat monitor event log. Devices insert and the status page (docs/index.html) reads
+-- with the publishable (anon) key; nobody can update or delete rows with that key.
 create table if not exists public.seat_events (
   id bigint generated always as identity primary key,
   ts timestamptz not null default now(),
@@ -21,6 +21,11 @@ alter table public.seat_events enable row level security;
 drop policy if exists "devices can insert" on public.seat_events;
 create policy "devices can insert" on public.seat_events
   for insert to anon with check (true);
+
+-- Seat states are shown on the public status page.
+drop policy if exists "anyone can read" on public.seat_events;
+create policy "anyone can read" on public.seat_events
+  for select to anon using (true);
 
 -- Daily summary per seat: time used, time left with belongings, long-away alerts.
 create or replace view public.seat_daily with (security_invoker = true) as

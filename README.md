@@ -18,6 +18,11 @@
 | 로그를 DB에 | `src/uploader.cpp` → Supabase REST `seat_events` (오프라인 시 큐에 보관 후 재전송), 스키마 `supabase/schema.sql` |
 | CI | `.github/workflows/ci.yml`: 상태 로직 유닛 테스트, 모델 검사, 펌웨어 빌드·크기 제한, 바이너리 artifact |
 
+## 상태 페이지
+`docs/index.html` (GitHub Pages). 좌석별 현재 상태, 오늘 요약, 최근 기록을 5초마다 갱신합니다.
+- 전체: `https://ki543219.github.io/seat-monitor/`
+- 배지 모드 (화면 공유·OBS용, 한 좌석만 크게): `?badge=desk-01`
+
 ## 하드웨어
 Seeed XIAO ESP32S3 Sense (OV2640 카메라)
 
