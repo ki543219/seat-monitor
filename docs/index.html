@@ -4,95 +4,138 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Seat Monitor</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
 :root{
-  --bg:#f4f5f2; --card:#ffffff; --ink:#1d2421; --muted:#5f6a64; --rule:#d8dcd5;
-  --occupied:#2f7a5a; --occupied-bg:#e3f1ea;
-  --away:#b2562a;     --away-bg:#f7e7dc;
-  --empty:#6b7570;    --empty-bg:#eceeea;
-  --alert:#b3261e;
-  --sans:"IBM Plex Sans KR",system-ui,"Malgun Gothic",sans-serif;
-  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --bg:#f4f6f5; --surface:#ffffff; --ink:#16201b; --ink-2:#47534d; --muted:#7a8580; --line:#e2e7e4;
+  --occupied:#1f7a55; --occupied-tint:#e5f2eb;
+  --away:#dd8530;     --away-stripe:#e9a768; --away-tint:#fbefe2;
+  --empty:#c8cecb;    --empty-tint:#eef1ef;
+  --alert:#b3261e;    --alert-tint:#fdecea;
+  --shadow:0 1px 2px rgba(16,24,20,.04),0 4px 16px rgba(16,24,20,.05);
+  --font:"Pretendard Variable",Pretendard,system-ui,-apple-system,"Malgun Gothic",sans-serif;
+  color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#121614; --card:#1a201d; --ink:#e7ebe6; --muted:#9aa59f; --rule:#323b36;
-  --occupied:#5fbf93; --occupied-bg:#1d3329; --away:#e08a5c; --away-bg:#3a271c;
-  --empty:#9aa59f; --empty-bg:#232a26; --alert:#ff8a80}}
+  --bg:#0e1211; --surface:#171c1a; --ink:#e6ebe8; --ink-2:#b3bdb8; --muted:#86918c; --line:#29312d;
+  --occupied:#2c9a70; --occupied-tint:#16281f; --away:#f5b979; --away-stripe:#d99a5a; --away-tint:#2c2218;
+  --empty:#4a544f; --empty-tint:#1d2321; --alert:#ff8a80; --alert-tint:#3a1d1b;
+  --shadow:none; color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#121614; --card:#1a201d; --ink:#e7ebe6; --muted:#9aa59f; --rule:#323b36;
-  --occupied:#5fbf93; --occupied-bg:#1d3329; --away:#e08a5c; --away-bg:#3a271c;
-  --empty:#9aa59f; --empty-bg:#232a26; --alert:#ff8a80}
+  --bg:#0e1211; --surface:#171c1a; --ink:#e6ebe8; --ink-2:#b3bdb8; --muted:#86918c; --line:#29312d;
+  --occupied:#2c9a70; --occupied-tint:#16281f; --away:#f5b979; --away-stripe:#d99a5a; --away-tint:#2c2218;
+  --empty:#4a544f; --empty-tint:#1d2321; --alert:#ff8a80; --alert-tint:#3a1d1b;
+  --shadow:none; color-scheme:dark}
 
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5}
-main{max-width:960px;margin:0 auto;padding:28px 16px 48px;display:grid;gap:28px}
-header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
-h1{margin:0;font-size:24px;letter-spacing:-.01em}
-h2{margin:0 0 10px;font-size:15px;font-weight:500;color:var(--muted)}
-.meta{font-family:var(--mono);font-size:12px;color:var(--muted)}
-.meta.err{color:var(--alert)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1040px;margin:0 auto;padding:28px 16px 56px;display:grid;gap:20px}
+.num{font-variant-numeric:tabular-nums}
 
-.seats{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
-.seat{background:var(--card);border:1px solid var(--rule);border-left:6px solid var(--c);padding:18px 20px;display:grid;gap:6px}
-.seat .id{font-family:var(--mono);font-size:12px;color:var(--muted)}
-.seat .state{font-size:26px;font-weight:700;color:var(--c)}
-.seat .since{font-size:14px;color:var(--muted)}
-.seat .alert{font-size:13px;font-weight:500;color:var(--alert)}
-.occupied{--c:var(--occupied);--cb:var(--occupied-bg)}
-.away{--c:var(--away);--cb:var(--away-bg)}
-.empty,.unknown{--c:var(--empty);--cb:var(--empty-bg)}
+/* header */
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:-.01em}
+.brand i{width:12px;height:12px;border-radius:3px;background:var(--occupied)}
+.live{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.live b{width:8px;height:8px;border-radius:50%;background:var(--occupied)}
+.live.err b{background:var(--alert)} .live.err{color:var(--alert)}
+@media (prefers-reduced-motion:no-preference){.live:not(.err) b{animation:pulse 2s ease-in-out infinite}}
+@keyframes pulse{50%{opacity:.35}}
 
-table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--rule);font-size:14px}
-th,td{padding:8px 12px;text-align:left;border-bottom:1px solid var(--rule)}
-th{font-weight:500;color:var(--muted);font-size:12px}
-td.num{font-family:var(--mono);text-align:right}
-th.num{text-align:right}
-.tag{display:inline-block;padding:1px 8px;font-size:12px;background:var(--cb);color:var(--c)}
-.scroll{overflow-x:auto}
-.empty-msg{color:var(--muted);font-size:14px;padding:12px 0}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chips button{font:inherit;font-size:13px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);cursor:pointer}
+.chips button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
 
-/* Badge mode: one seat, full screen, for screen sharing / OBS */
-body.badge{display:grid;place-items:center;min-height:100vh;background:var(--cb,var(--bg))}
-body.badge main{display:none}
-#badge{display:none;text-align:center;padding:16px}
-body.badge #badge{display:block}
-#badge .state{font-size:clamp(40px,12vw,140px);font-weight:700;color:var(--c);line-height:1.1}
-#badge .since{font-size:clamp(16px,3vw,32px);color:var(--muted);margin-top:12px}
-#badge .id{font-family:var(--mono);font-size:clamp(12px,1.6vw,18px);color:var(--muted);margin-top:8px}
-#badge .alert{font-size:clamp(16px,2.6vw,28px);color:var(--alert);font-weight:500;margin-top:10px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:22px 24px}
+.card h2{margin:0;font-size:15px;font-weight:600}
+.card-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:20px}
+@media (max-width:760px){.hero{grid-template-columns:1fr}}
+.status{position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;gap:20px;min-height:230px;background:var(--tint,var(--surface))}
+.status .seat{font-size:13px;color:var(--ink-2)}
+.status .state{display:flex;align-items:center;gap:12px;font-size:clamp(28px,4.4vw,40px);font-weight:700;letter-spacing:-.02em;line-height:1.15}
+.status .state i{width:16px;height:16px;border-radius:50%;background:var(--c);flex:none}
+.status .timer{font-size:clamp(44px,8vw,72px);font-weight:600;letter-spacing:-.03em;line-height:1}
+.status .since{font-size:14px;color:var(--ink-2)}
+.status .alert{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;font-size:13px;font-weight:600;color:var(--alert);background:var(--alert-tint);padding:6px 12px;border-radius:999px}
+.s-occupied{--c:var(--occupied);--tint:var(--occupied-tint)}
+.s-away{--c:var(--away);--tint:var(--away-tint)}
+.s-empty,.s-unknown{--c:var(--empty);--tint:var(--empty-tint)}
+
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:16px 18px;display:flex;flex-direction:column;gap:6px}
+.tile .k{font-size:13px;color:var(--ink-2);display:flex;align-items:center;gap:8px}
+.tile .k i{width:8px;height:8px;border-radius:2px;background:var(--c,var(--muted))}
+.tile .v{font-size:28px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.tile .v small{font-size:15px;font-weight:500;color:var(--ink-2);margin-left:2px}
+.tile .d{font-size:12px;color:var(--muted)}
+@media (max-width:520px){.tile{padding:14px}.tile .v{font-size:22px}}
+
+/* timeline */
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:12px;height:12px;border-radius:3px;background:var(--c)}
+.legend .s-away i,.seg.s-away{background:repeating-linear-gradient(135deg,var(--away) 0 6px,var(--away-stripe) 6px 9px)}
+.bar{position:relative;height:56px;border-radius:10px;background:var(--bg);overflow:hidden}
+.seg{position:absolute;top:0;bottom:0;background:var(--c);border:0;padding:0;cursor:pointer;
+  box-shadow:inset -2px 0 0 var(--surface)}  /* 2px surface gap between segments */
+.seg:first-child{border-radius:10px 0 0 10px}
+.seg:hover,.seg:focus-visible{filter:brightness(1.08);outline:none}
+.seg:focus-visible{box-shadow:inset 0 0 0 2px var(--ink)}
+.axis{position:relative;height:22px;margin-top:6px;font-size:12px;color:var(--muted)}
+.axis span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.axis span:first-child{transform:none}
+.tip{position:fixed;z-index:10;pointer-events:none;background:var(--ink);color:var(--surface);font-size:13px;padding:8px 12px;border-radius:8px;line-height:1.45;white-space:nowrap;opacity:0;transition:opacity .1s}
+.tip b{font-weight:600}
+.tip.on{opacity:1}
+
+/* recent */
+.feed{list-style:none;margin:0;padding:0;display:grid}
+.feed li{display:grid;grid-template-columns:72px 16px 1fr auto;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);font-size:14px}
+.feed li:first-child{border-top:0}
+.feed time{color:var(--muted);font-size:13px}
+.feed .dot{width:10px;height:10px;border-radius:50%;background:var(--c);justify-self:center}
+.feed .what{color:var(--ink)}
+.feed .what em{font-style:normal;color:var(--muted);margin:0 6px}
+.feed .dur{color:var(--muted);font-size:13px;text-align:right}
+.feed .s-alert{--c:var(--alert)}
+@media (max-width:520px){.feed li{grid-template-columns:56px 14px 1fr}.feed .dur{grid-column:3;text-align:left;margin-top:-6px}}
+
+.empty-state{text-align:center;padding:40px 16px;color:var(--ink-2)}
+.empty-state h2{font-size:20px;margin:0 0 8px;color:var(--ink)}
+.empty-state ol{display:inline-block;text-align:left;margin:12px 0 0;padding-left:20px;font-size:14px;line-height:1.9}
+.empty-state code{background:var(--bg);padding:2px 6px;border-radius:4px;font-size:13px}
+
+footer{font-size:12px;color:var(--muted);text-align:center;padding-top:8px}
+
+/* badge mode: one seat, full screen (screen share / OBS) */
+#badge{display:none}
+body.badge .wrap{display:none}
+body.badge #badge{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;min-height:100vh;padding:24px;text-align:center;background:var(--tint,var(--bg))}
+#badge .state{display:flex;align-items:center;gap:.3em;font-size:clamp(40px,10vw,120px);font-weight:700;letter-spacing:-.03em;line-height:1.1}
+#badge .state i{width:.4em;height:.4em;border-radius:50%;background:var(--c)}
+#badge .timer{font-size:clamp(28px,6vw,72px);font-weight:600;color:var(--ink-2)}
+#badge .seat{font-size:clamp(13px,1.6vw,18px);color:var(--muted)}
+#badge .alert{font-size:clamp(15px,2.2vw,24px);font-weight:600;color:var(--alert)}
 </style>
 </head>
 <body>
-<main>
-  <header>
-    <h1>Seat Monitor</h1>
-    <span class="meta" id="status">불러오는 중…</span>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><i></i>Seat Monitor</div>
+    <span class="live" id="live"><b></b><span id="liveText">연결 중…</span></span>
   </header>
-  <section>
-    <h2>현재 상태</h2>
-    <div class="seats" id="seats"></div>
-  </section>
-  <section>
-    <h2>오늘 요약</h2>
-    <div class="scroll"><table>
-      <thead><tr><th>좌석</th><th class="num">사용 (분)</th><th class="num">자리 비움 (분)</th><th class="num">자리 비움 횟수</th><th class="num">장시간 알림</th></tr></thead>
-      <tbody id="daily"></tbody>
-    </table></div>
-  </section>
-  <section>
-    <h2>최근 기록</h2>
-    <div class="scroll"><table>
-      <thead><tr><th>시각</th><th>좌석</th><th>변화</th><th class="num">이전 상태 지속</th></tr></thead>
-      <tbody id="events"></tbody>
-    </table></div>
-  </section>
-</main>
+  <nav class="chips" id="chips" aria-label="좌석 선택"></nav>
+  <main id="main"></main>
+  <footer>영상은 기기 밖으로 나가지 않습니다 · ESP32-S3에서 판정한 상태만 기록됩니다</footer>
+</div>
 <div id="badge"></div>
+<div class="tip" id="tip" role="tooltip"></div>
 
 <script>
-// Publishable key: read/insert only, safe to ship in a public page.
+// Publishable key: insert/select only (RLS), safe to ship in a public page.
 const SUPABASE_URL = "https://haivgsjhzpzzfctvtpht.supabase.co";
 const SUPABASE_KEY = "sb_publishable__OgkuoZJ0eeN8WluGW_MnA_r-Uy7p2N";
 const REFRESH_MS = 5000;
@@ -100,105 +143,236 @@ const REFRESH_MS = 5000;
 const LABEL = { occupied: "자리에 있음", away: "자리 비움", empty: "빈 자리", unknown: "확인 중" };
 const params = new URLSearchParams(location.search);
 const badgeSeat = params.get("badge");
-if (badgeSeat) document.body.classList.add("badge");
+let selected = params.get("seat");
+let events = [];      // newest first
+let lastOk = null, lastErr = null;
 
-let seats = [];  // [{seat_id, state, since, alert}]
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pad = n => String(n).padStart(2, "0");
+const clock = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 3600)}:${pad(Math.floor(s % 3600 / 60))}:${pad(s % 60)}`; };
+const hm = d => d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Seoul" });
+function human(ms) {
+  const m = Math.round(ms / 60000);
+  if (m < 1) return "1분 미만";
+  return m >= 60 ? `${Math.floor(m / 60)}시간 ${m % 60}분` : `${m}분`;
+}
+function dayStart() {
+  const d = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
+  return new Date(`${d}T00:00:00+09:00`).getTime();
+}
 
-async function api(path) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers: { apikey: SUPABASE_KEY } });
+// ?demo shows a made-up day so the page can be presented without the device.
+function demoEvents() {
+  const now = Date.now(), m = 60000, list = [];
+  const plan = [["empty", 6], ["occupied", 95], ["away", 12], ["occupied", 70], ["away", 41], ["occupied", 55], ["empty", 25], ["occupied", 38]];
+  let t = now - plan.reduce((s, p) => s + p[1], 0) * m - 9 * m, prev = "unknown";
+  plan.forEach(([state, mins], i) => {
+    const dur = i ? plan[i - 1][1] * m : 0;
+    list.push({ seat_id: "desk-01", ts: new Date(t).toISOString(), kind: "changed", from_state: prev, to_state: state, duration_s: dur / 1000 });
+    if (state === "away" && mins >= 30) list.push({ seat_id: "desk-01", ts: new Date(t + 30 * m).toISOString(), kind: "away_too_long", from_state: "away", to_state: "away", duration_s: 1800 });
+    prev = state; t += mins * m;
+  });
+  return list.sort((a, b) => b.ts.localeCompare(a.ts));
+}
+
+async function fetchEvents() {
+  if (params.has("demo")) return demoEvents();
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/seat_events?select=seat_id,ts,kind,from_state,to_state,duration_s&order=ts.desc&limit=1000`,
+    { headers: { apikey: SUPABASE_KEY } });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
 
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+// Today's state segments for one seat, plus totals and the current state.
+function analyze(seat) {
+  const now = Date.now(), start = dayStart();
+  const changes = events.filter(e => e.seat_id === seat && e.kind === "changed").reverse();  // oldest first
+  const segs = [];
+  changes.forEach((e, i) => {
+    if (e.to_state === "unknown") return;
+    const s = new Date(e.ts).getTime();
+    const end = i + 1 < changes.length ? new Date(changes[i + 1].ts).getTime() : now;
+    if (end <= start) return;
+    segs.push({ state: e.to_state, from: Math.max(s, start), to: end, realFrom: s });
+  });
+  const total = { occupied: 0, away: 0, empty: 0 };
+  segs.forEach(g => total[g.state] = (total[g.state] || 0) + (g.to - g.from));
+  const last = changes[changes.length - 1];
+  const current = last ? { state: last.to_state, since: new Date(last.ts).getTime() } : null;
+  const lastAlert = events.find(e => e.seat_id === seat && e.kind === "away_too_long");
+  const alert = current && current.state === "away" && lastAlert && new Date(lastAlert.ts).getTime() >= current.since;
+  return {
+    segs, total, current, alert,
+    awayCount: segs.filter(g => g.state === "away" && g.realFrom >= start).length,
+    alertsToday: events.filter(e => e.seat_id === seat && e.kind === "away_too_long" && new Date(e.ts).getTime() >= start).length,
+  };
 }
 
-function fmtDuration(sec) {
-  sec = Math.max(0, Math.floor(sec));
-  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
-  if (h) return `${h}시간 ${m}분`;
-  if (m) return `${m}분 ${s}초`;
-  return `${s}초`;
+function renderChips(seats) {
+  $("chips").innerHTML = seats.length > 1 ? seats.map(s =>
+    `<button type="button" data-seat="${esc(s)}" aria-pressed="${s === selected}">${esc(s)}</button>`).join("") : "";
 }
 
-const fmtTime = ts => new Date(ts).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-const todayKST = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
-
-// Latest 'changed' event gives the current state; an away_too_long after it means the alert fired.
-function currentSeats(events) {
-  const bySeat = new Map();
-  for (const e of events) {  // newest first
-    const s = bySeat.get(e.seat_id) || { seat_id: e.seat_id, alert: false };
-    if (s.state) continue;
-    if (e.kind === "away_too_long") s.alert = true;
-    else { s.state = e.to_state; s.since = new Date(e.ts); }
-    bySeat.set(e.seat_id, s);
-  }
-  return [...bySeat.values()].filter(s => s.state).sort((a, b) => a.seat_id.localeCompare(b.seat_id));
+function renderEmpty() {
+  $("main").innerHTML = `<section class="card empty-state">
+    <h2>아직 기록이 없습니다</h2>
+    <p>ESP32가 상태를 보내면 여기에 실시간으로 나타납니다.</p>
+    <ol>
+      <li>ESP32에 전원이 들어가 있고 Wi-Fi(2.4GHz)에 연결되어 있는지</li>
+      <li>Supabase에서 <code>supabase/schema.sql</code>의 읽기 정책을 실행했는지</li>
+    </ol>
+  </section>`;
 }
 
-function renderSeats() {
-  const now = Date.now();
-  document.getElementById("seats").innerHTML = seats.length ? seats.map(s => `
-    <article class="seat ${esc(s.state)}">
-      <span class="id">${esc(s.seat_id)}</span>
-      <span class="state">${LABEL[s.state] || esc(s.state)}</span>
-      <span class="since">${fmtDuration((now - s.since) / 1000)}째 · ${fmtTime(s.since)}부터</span>
-      ${s.alert && s.state === "away" ? '<span class="alert">⚠ 장시간 자리 비움 (짐만 있음)</span>' : ""}
-    </article>`).join("") : '<p class="empty-msg">아직 기록이 없습니다. ESP32가 켜져 있는지 확인하세요.</p>';
+function renderMain(a) {
+  const s = a.current ? a.current.state : "unknown";
+  const studied = a.total.occupied, away = a.total.away;
+  const ratio = studied + away > 0 ? Math.round(studied / (studied + away) * 100) : 0;
+  $("main").innerHTML = `
+  <div style="display:grid;gap:20px">
+    <section class="hero">
+      <article class="card status s-${esc(s)}" aria-live="polite">
+        <div class="seat">${esc(selected)}</div>
+        <div>
+          <div class="state"><i></i>${LABEL[s] || esc(s)}</div>
+          <div class="timer num" id="timer">${a.current ? clock(Date.now() - a.current.since) : "–"}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${a.alert ? '<span class="alert">⚠ 짐만 두고 장시간 자리 비움</span>' : ""}
+          <span class="since">${a.current ? `${hm(new Date(a.current.since))}부터` : ""}</span>
+        </div>
+      </article>
+      <div class="tiles">
+        <div class="tile s-occupied"><span class="k"><i></i>오늘 앉아 있던 시간</span><span class="v num">${human(studied)}</span><span class="d">자리 비운 시간 제외</span></div>
+        <div class="tile s-away"><span class="k"><i></i>자리 비운 시간</span><span class="v num">${human(away)}</span><span class="d">짐을 두고 떠난 시간</span></div>
+        <div class="tile"><span class="k">자리 비움 횟수</span><span class="v num">${a.awayCount}<small>회</small></span><span class="d">장시간 알림 ${a.alertsToday}회</span></div>
+        <div class="tile"><span class="k">집중 유지율</span><span class="v num">${ratio}<small>%</small></span><span class="d">앉아 있던 시간 ÷ (앉음 + 자리 비움)</span></div>
+      </div>
+    </section>
 
-  if (badgeSeat) {
-    const s = seats.find(x => x.seat_id === badgeSeat);
-    const el = document.getElementById("badge");
-    document.body.className = "badge " + (s ? s.state : "unknown");
-    el.innerHTML = s ? `
-      <div class="state">${LABEL[s.state] || esc(s.state)}</div>
-      <div class="since">${fmtDuration((now - s.since) / 1000)}째</div>
-      ${s.alert && s.state === "away" ? '<div class="alert">장시간 자리 비움</div>' : ""}
-      <div class="id">${esc(s.seat_id)}</div>`
-      : `<div class="state">확인 중</div><div class="id">${esc(badgeSeat)} 기록 없음</div>`;
-  }
+    <section class="card">
+      <div class="card-head">
+        <h2>오늘의 자리 기록</h2>
+        <div class="legend">
+          <span class="s-occupied"><i></i>자리에 있음</span>
+          <span class="s-away"><i></i>자리 비움</span>
+          <span class="s-empty"><i></i>빈 자리</span>
+        </div>
+      </div>
+      ${timeline(a.segs)}
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>최근 기록</h2></div>
+      ${feed()}
+    </section>
+  </div>`;
 }
 
-function renderDaily(rows) {
-  document.getElementById("daily").innerHTML = rows.length ? rows.map(r => `
-    <tr><td>${esc(r.seat_id)}</td><td class="num">${r.occupied_min ?? 0}</td><td class="num">${r.away_min ?? 0}</td>
-    <td class="num">${r.away_count}</td><td class="num">${r.away_alerts}</td></tr>`).join("")
-    : '<tr><td colspan="5" class="empty-msg">오늘 기록 없음</td></tr>';
+function timeline(segs) {
+  if (!segs.length) return '<p class="d" style="color:var(--muted);margin:0">오늘 기록이 아직 없습니다.</p>';
+  const now = Date.now(), hour = 3600000;
+  let from = Math.floor(segs[0].from / hour) * hour;
+  let to = Math.ceil(now / hour) * hour;
+  if (to - from < 2 * hour) from = to - 2 * hour;
+  const span = to - from, pct = t => ((t - from) / span * 100).toFixed(3);
+  const bars = segs.map((g, i) => `<button type="button" class="seg s-${g.state}" data-i="${i}"
+      style="left:${pct(g.from)}%;width:${(Math.max(g.to - g.from, span / 400) / span * 100).toFixed(3)}%"
+      aria-label="${LABEL[g.state]} ${hm(new Date(g.from))}–${hm(new Date(g.to))}, ${human(g.to - g.from)}"></button>`).join("");
+  const step = span > 12 * hour ? 3 * hour : span > 6 * hour ? 2 * hour : hour;
+  let ticks = "";
+  for (let t = from; t <= to; t += step) ticks += `<span style="left:${pct(t)}%">${hm(new Date(t))}</span>`;
+  window.__segs = segs;
+  return `<div class="bar">${bars}</div><div class="axis num">${ticks}</div>`;
 }
 
-function renderEvents(events) {
-  document.getElementById("events").innerHTML = events.slice(0, 20).map(e => {
-    const change = e.kind === "away_too_long"
-      ? '<span class="tag away">장시간 자리 비움 알림</span>'
-      : `<span class="tag ${esc(e.from_state)}">${LABEL[e.from_state] || esc(e.from_state)}</span> → <span class="tag ${esc(e.to_state)}">${LABEL[e.to_state] || esc(e.to_state)}</span>`;
-    return `<tr><td class="num" style="text-align:left">${fmtTime(e.ts)}</td><td>${esc(e.seat_id)}</td><td>${change}</td><td class="num">${fmtDuration(e.duration_s)}</td></tr>`;
-  }).join("") || '<tr><td colspan="4" class="empty-msg">기록 없음</td></tr>';
+function feed() {
+  const list = events.filter(e => e.seat_id === selected).slice(0, 15);
+  if (!list.length) return '<p style="color:var(--muted);margin:0">기록 없음</p>';
+  return `<ul class="feed">${list.map(e => {
+    const t = new Date(e.ts), dur = e.duration_s * 1000;
+    if (e.kind === "away_too_long") return `<li class="s-alert"><time class="num">${hm(t)}</time><span class="dot"></span>
+      <span class="what">장시간 자리 비움 알림</span><span class="dur">${human(dur)}째 비어 있음</span></li>`;
+    return `<li class="s-${esc(e.to_state)}"><time class="num">${hm(t)}</time><span class="dot"></span>
+      <span class="what">${LABEL[e.to_state] || esc(e.to_state)}<em>←</em><span style="color:var(--muted)">${LABEL[e.from_state] || esc(e.from_state)}</span></span>
+      <span class="dur">${e.from_state === "unknown" ? "시작" : `${human(dur)} 뒤`}</span></li>`;
+  }).join("")}</ul>`;
+}
+
+function renderBadge(a) {
+  const s = a && a.current ? a.current.state : "unknown";
+  document.body.className = `badge s-${s}`;
+  $("badge").innerHTML = `
+    <div class="state"><i></i>${LABEL[s] || esc(s)}</div>
+    <div class="timer num" id="timer">${a && a.current ? clock(Date.now() - a.current.since) : ""}</div>
+    ${a && a.alert ? '<div class="alert">장시간 자리 비움</div>' : ""}
+    <div class="seat">${esc(badgeSeat)}</div>`;
+}
+
+function render() {
+  const seats = [...new Set(events.map(e => e.seat_id))].sort();
+  if (badgeSeat) { renderBadge(seats.includes(badgeSeat) ? analyze(badgeSeat) : null); return; }
+  if (!seats.length) { renderChips([]); renderEmpty(); return; }
+  if (!seats.includes(selected)) selected = seats[0];
+  renderChips(seats);
+  renderMain(analyze(selected));
+}
+
+function renderLive() {
+  const el = $("live");
+  el.classList.toggle("err", !!lastErr);
+  $("liveText").textContent = lastErr ? `연결 실패 (${lastErr})`
+    : lastOk ? `실시간 · ${Math.round((Date.now() - lastOk) / 1000)}초 전 갱신` : "연결 중…";
 }
 
 async function refresh() {
-  const status = document.getElementById("status");
-  try {
-    const [events, daily] = await Promise.all([
-      api("seat_events?select=seat_id,ts,kind,from_state,to_state,duration_s&order=ts.desc&limit=300"),
-      api(`seat_daily?day=eq.${todayKST()}&order=seat_id`),
-    ]);
-    seats = currentSeats(events);
-    renderSeats();
-    renderDaily(daily);
-    renderEvents(events);
-    status.className = "meta";
-    status.textContent = `${fmtTime(new Date())} 갱신 · ${REFRESH_MS / 1000}초마다`;
-  } catch (err) {
-    status.className = "meta err";
-    status.textContent = `불러오기 실패 (${err.message}) — supabase/schema.sql의 읽기 정책을 실행했는지 확인`;
-  }
+  try { events = await fetchEvents(); lastOk = Date.now(); lastErr = null; render(); }
+  catch (err) { lastErr = err.message; }
+  renderLive();
 }
+
+// tick the live timer without a full re-render
+setInterval(() => {
+  const t = $("timer");
+  if (t && events.length) {
+    const a = analyze(badgeSeat || selected);
+    if (a.current) t.textContent = clock(Date.now() - a.current.since);
+  }
+  renderLive();
+}, 1000);
+
+$("chips").addEventListener("click", e => {
+  const b = e.target.closest("button[data-seat]");
+  if (!b) return;
+  selected = b.dataset.seat;
+  history.replaceState(null, "", `?seat=${encodeURIComponent(selected)}`);
+  render();
+});
+
+// timeline tooltip (pointer + keyboard focus)
+const tip = $("tip");
+function showTip(seg, x, y) {
+  const g = (window.__segs || [])[seg.dataset.i];
+  if (!g) return;
+  tip.innerHTML = `<b>${LABEL[g.state]}</b><br>${hm(new Date(g.from))} – ${hm(new Date(g.to))} · ${human(g.to - g.from)}`;
+  tip.style.left = Math.min(x + 12, innerWidth - tip.offsetWidth - 8) + "px";
+  tip.style.top = (y - tip.offsetHeight - 12) + "px";
+  tip.classList.add("on");
+}
+document.addEventListener("pointermove", e => {
+  const seg = e.target.closest(".seg");
+  seg ? showTip(seg, e.clientX, e.clientY) : tip.classList.remove("on");
+});
+document.addEventListener("focusin", e => {
+  const seg = e.target.closest(".seg");
+  if (!seg) return tip.classList.remove("on");
+  const r = seg.getBoundingClientRect();
+  showTip(seg, r.left + r.width / 2, r.top);
+});
 
 refresh();
 setInterval(refresh, REFRESH_MS);
-setInterval(renderSeats, 1000);  // tick the "n분째" counters between fetches
 </script>
 </body>
 </html>
