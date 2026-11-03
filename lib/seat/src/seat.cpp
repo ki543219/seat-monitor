@@ -39,6 +39,10 @@ float diff_ratio(const uint8_t* frame, const uint8_t* baseline, size_t n,
   return static_cast<float>(changed) / static_cast<float>(n);
 }
 
+bool person_present(float score, bool was_present, float on_threshold, float off_threshold) {
+  return was_present ? score >= off_threshold : score >= on_threshold;
+}
+
 State classify(bool person, float diff_ratio, float diff_threshold) {
   if (person) return State::Occupied;
   return diff_ratio > diff_threshold ? State::Away : State::Empty;

@@ -19,6 +19,22 @@ void test_classify() {
   TEST_ASSERT_EQUAL(State::Empty, seat::classify(false, 0.05f, 0.1f));
 }
 
+void test_person_hysteresis() {
+  // Scores logged while someone sat at the desk wobbled between 0.42 and 0.67.
+  const float seated[] = {0.67f, 0.63f, 0.57f, 0.52f, 0.43f, 0.61f, 0.42f};
+  bool present = false;
+  present = seat::person_present(0.67f, present, 0.5f, 0.3f);
+  TEST_ASSERT_TRUE(present);
+  for (float s : seated) {
+    present = seat::person_present(s, present, 0.5f, 0.3f);
+    TEST_ASSERT_TRUE(present);
+  }
+  present = seat::person_present(0.12f, present, 0.5f, 0.3f);  // empty seat
+  TEST_ASSERT_FALSE(present);
+  present = seat::person_present(0.42f, present, 0.5f, 0.3f);  // not enough to sit back down
+  TEST_ASSERT_FALSE(present);
+}
+
 void test_diff_identical_is_zero() {
   memset(base, 100, N);
   memcpy(frame, base, N);
@@ -110,6 +126,7 @@ void test_tracker_no_alert_if_never_occupied() {
 int main() {
   UNITY_BEGIN();
   RUN_TEST(test_classify);
+  RUN_TEST(test_person_hysteresis);
   RUN_TEST(test_diff_identical_is_zero);
   RUN_TEST(test_diff_ignores_global_brightness);
   RUN_TEST(test_diff_detects_object);

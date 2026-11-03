@@ -16,6 +16,7 @@ uint8_t* baseline = nullptr;
 seat::Tracker tracker({CONFIRM_FRAMES, AWAY_ALERT_MS});
 uint32_t last_frame_ms = 0;
 uint32_t last_heartbeat_ms = 0;
+bool person_seen = false;
 uint32_t button_down_ms = 0;
 
 bool capture_baseline() {
@@ -122,14 +123,15 @@ void loop() {
   esp_camera_fb_return(fb);
   if (score < 0) return;
 
-  seat::State observed = seat::classify(score > PERSON_THRESHOLD, diff, DIFF_THRESHOLD);
+  person_seen = seat::person_present(score, person_seen, PERSON_ON, PERSON_OFF);
+  seat::State observed = seat::classify(person_seen, diff, DIFF_THRESHOLD);
   seat::Event ev = tracker.update(observed, millis());
 
   // label:value pairs so the Arduino IDE Serial Plotter can graph them (all on a 0..1 scale).
   // seat: 1 = occupied, 0.5 = away, 0 = empty.
   const seat::State st = tracker.state();
-  Serial.printf("person:%.2f diff:%.2f person_threshold:%.2f diff_threshold:%.2f seat:%.1f\n", score,
-                diff, PERSON_THRESHOLD, DIFF_THRESHOLD,
+  Serial.printf("person:%.2f diff:%.2f person_on:%.2f person_off:%.2f diff_threshold:%.2f seat:%.1f\n",
+                score, diff, PERSON_ON, PERSON_OFF, DIFF_THRESHOLD,
                 st == seat::State::Occupied ? 1.0f : st == seat::State::Away ? 0.5f : 0.0f);
 
   if (ev.kind != seat::Event::Kind::None) {

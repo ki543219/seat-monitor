@@ -19,6 +19,10 @@ const char* to_string(State s);
 float diff_ratio(const uint8_t* frame, const uint8_t* baseline, size_t n,
                  uint8_t pixel_threshold);
 
+// Person decision with hysteresis: a present person stays present until the score drops
+// below off_threshold, so a score wobbling around one threshold does not flap.
+bool person_present(float score, bool was_present, float on_threshold, float off_threshold);
+
 // Single-frame observation from the model output and the scene difference.
 State classify(bool person, float diff_ratio, float diff_threshold);
 

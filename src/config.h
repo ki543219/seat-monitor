@@ -12,7 +12,10 @@
 #endif
 
 // Detection tuning
-#define PERSON_THRESHOLD 0.6f   // person score above this counts as a person
+// Person score hysteresis. Seated scores wobbled 0.42-0.67 and an empty seat scored
+// 0.05-0.14, so a single 0.6 threshold flapped between occupied and away.
+#define PERSON_ON 0.5f          // not present -> present at or above this
+#define PERSON_OFF 0.3f         // present -> not present below this
 #define PIXEL_THRESHOLD 25      // per-pixel change vs. baseline (0..255)
 #define DIFF_THRESHOLD 0.08f    // changed-pixel fraction above this = something on the seat
 #define CONFIRM_FRAMES 4        // frames in a row before a state change is accepted
