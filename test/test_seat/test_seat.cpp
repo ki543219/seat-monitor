@@ -80,6 +80,29 @@ void test_tracker_changes_after_confirm_frames() {
   TEST_ASSERT_EQUAL_UINT32(11000, ev.duration_ms);
 }
 
+void test_tracker_leaving_needs_more_frames() {
+  seat::Tracker t({2, 60000, 6});
+  t.update(State::Occupied, 0);
+  t.update(State::Occupied, 500);
+  TEST_ASSERT_EQUAL(State::Occupied, t.state());
+
+  // Model misses the person for 5 frames, then sees them again: still occupied.
+  for (int i = 1; i <= 5; i++) t.update(State::Away, 500 + i * 500);
+  t.update(State::Occupied, 3500);
+  TEST_ASSERT_EQUAL(State::Occupied, t.state());
+
+  // Really gone: 6 frames in a row.
+  Event ev;
+  for (int i = 1; i <= 6; i++) ev = t.update(State::Away, 3500 + i * 500);
+  TEST_ASSERT_EQUAL(Event::Kind::Changed, ev.kind);
+  TEST_ASSERT_EQUAL(State::Away, t.state());
+
+  // Sitting back down uses the short confirm count.
+  t.update(State::Occupied, 7000);
+  t.update(State::Occupied, 7500);
+  TEST_ASSERT_EQUAL(State::Occupied, t.state());
+}
+
 void test_tracker_away_alert_fires_once() {
   seat::Tracker t({1, 30000});
   t.update(State::Occupied, 0);
@@ -132,6 +155,7 @@ int main() {
   RUN_TEST(test_diff_detects_object);
   RUN_TEST(test_tracker_ignores_single_glitch);
   RUN_TEST(test_tracker_changes_after_confirm_frames);
+  RUN_TEST(test_tracker_leaving_needs_more_frames);
   RUN_TEST(test_tracker_away_alert_fires_once);
   RUN_TEST(test_tracker_alert_without_visible_belongings);
   RUN_TEST(test_tracker_absence_spans_away_and_empty);

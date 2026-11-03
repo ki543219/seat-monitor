@@ -30,6 +30,8 @@ struct Config {
   uint8_t confirm_frames;  // identical observations in a row needed to change state
   uint32_t away_alert_ms;  // absence (person left, with or without belongings) longer than
                            // this raises one AwayTooLong event
+  uint8_t leave_frames;    // frames needed to leave Occupied (0 or omitted = confirm_frames).
+                           // Longer, so a person briefly missed by the model is not counted as gone.
 };
 
 struct Event {

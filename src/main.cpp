@@ -13,7 +13,7 @@ constexpr size_t kPixels = detector::kSize * detector::kSize;
 constexpr int kBootButton = 0;  // hold BOOT for 1 s to re-capture the empty-seat baseline
 
 uint8_t* baseline = nullptr;
-seat::Tracker tracker({CONFIRM_FRAMES, AWAY_ALERT_MS});
+seat::Tracker tracker({CONFIRM_FRAMES, AWAY_ALERT_MS, LEAVE_FRAMES});
 uint32_t last_frame_ms = 0;
 uint32_t last_heartbeat_ms = 0;
 bool person_seen = false;

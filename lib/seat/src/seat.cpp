@@ -59,7 +59,9 @@ Event Tracker::update(State observed, uint32_t now_ms) {
       candidate_ = observed;
       candidate_count_ = 1;
     }
-    if (candidate_count_ >= cfg_.confirm_frames) {
+    const uint8_t needed = state_ == State::Occupied && cfg_.leave_frames ? cfg_.leave_frames
+                                                                          : cfg_.confirm_frames;
+    if (candidate_count_ >= needed) {
       ev.kind = Event::Kind::Changed;
       ev.from = state_;
       ev.to = observed;
