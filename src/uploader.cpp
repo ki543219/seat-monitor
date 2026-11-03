@@ -55,7 +55,7 @@ bool post(const char* table, const String& body) {
   http.addHeader("Authorization", "Bearer " + s.supabase_key);
   http.addHeader("Prefer", "return=minimal");
   http.addHeader("x-device-token", s.device_token);  // checked by the insert policies
-  http.setTimeout(8000);
+  http.setTimeout(15000);  // home networks occasionally stall for several seconds
   int code = http.POST(body);
   if (code != 201) Serial.printf("upload to %s failed: HTTP %d %s\n", table, code, http.getString().c_str());
   http.end();

@@ -29,6 +29,7 @@
 #define BASELINE_REFRESH_MS (5UL * 60 * 1000)     // at most one refresh per 5 min
 #define AWAY_ALERT_MS (30UL * 60 * 1000)  // absence before alert: 30 min; e.g. 60 s for a demo
 #define HEARTBEAT_MS (60UL * 1000)        // liveness row for the status page
+#define HEARTBEAT_RETRY_MS (15UL * 1000)  // retry sooner after a failed heartbeat
 
 // Over-the-air updates from GitHub Releases (release builds only, FW_VERSION "vX.Y.Z")
 #define OTA_REPO "https://github.com/ki543219/seat-monitor"

@@ -56,6 +56,11 @@ void connect_wifi() {
     Serial.print('.');
   }
   Serial.println(WiFi.status() == WL_CONNECTED ? " connected" : " not yet (will retry)");
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.printf("# wifi ip %s gw %s dns %s bssid %s ch %d\n", WiFi.localIP().toString().c_str(),
+                  WiFi.gatewayIP().toString().c_str(), WiFi.dnsIP().toString().c_str(),
+                  WiFi.BSSIDstr().c_str(), WiFi.channel());
+  }
   configTime(0, 0, "pool.ntp.org", "time.google.com");
 }
 
@@ -181,9 +186,15 @@ void loop() {
   }
 
   if (millis() - last_heartbeat_ms >= HEARTBEAT_MS || last_heartbeat_ms == 0) {
-    last_heartbeat_ms = millis();
     bool ok = uploader::heartbeat(st, score, diff);
-    Serial.printf("# heartbeat %s, state %s, infer %lums, queue %u\n", ok ? "sent" : "failed",
-                  seat::to_string(st), (unsigned long)infer_ms, (unsigned)uploader::pending());
+    // On a flaky network retry in 15 s, so the page does not briefly show the device as off.
+    last_heartbeat_ms = ok ? millis() : millis() - HEARTBEAT_MS + HEARTBEAT_RETRY_MS;
+    Serial.printf("# heartbeat %s, state %s, infer %lums, queue %u, heap %u (min %u)\n",
+                  ok ? "sent" : "failed", seat::to_string(st), (unsigned long)infer_ms,
+                  (unsigned)uploader::pending(), (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMinFreeHeap());
+    Serial.printf("# wifi %d dBm, ip %s gw %s dns %s bssid %s, time %s\n", (int)WiFi.RSSI(),
+                  WiFi.localIP().toString().c_str(), WiFi.gatewayIP().toString().c_str(),
+                  WiFi.dnsIP().toString().c_str(), WiFi.BSSIDstr().c_str(),
+                  now_unix() ? "synced" : "NOT synced");
   }
 }
