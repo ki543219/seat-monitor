@@ -26,6 +26,11 @@ bool person_present(float score, bool was_present, float on_threshold, float off
 // Single-frame observation from the model output and the scene difference.
 State classify(bool person, float diff_ratio, float diff_threshold);
 
+// The empty-seat baseline may follow slow lighting drift, but only while the seat has been
+// confirmed empty for a while (never with a person or belongings in view).
+bool should_refresh_baseline(State state, State observed, uint32_t in_state_ms,
+                             uint32_t since_refresh_ms, uint32_t min_empty_ms, uint32_t interval_ms);
+
 struct Config {
   uint8_t confirm_frames;  // identical observations in a row needed to change state
   uint32_t away_alert_ms;  // absence (person left, with or without belongings) longer than
@@ -49,6 +54,7 @@ class Tracker {
 
   Event update(State observed, uint32_t now_ms);
   State state() const { return state_; }
+  uint32_t since_ms() const { return since_ms_; }  // when the current state began
 
  private:
   Config cfg_;

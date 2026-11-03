@@ -13,12 +13,16 @@ constexpr size_t kPixels = detector::kSize * detector::kSize;
 constexpr int kBootButton = 0;  // hold BOOT for 1 s to re-capture the empty-seat baseline
 
 uint8_t* baseline = nullptr;
+bool baseline_ready = false;  // taken automatically once the model sees nobody (see loop)
+uint8_t clear_frames = 0;     // consecutive frames without a person, before the first baseline
+uint32_t last_refresh_ms = 0;
 seat::Tracker tracker({CONFIRM_FRAMES, AWAY_ALERT_MS, LEAVE_FRAMES});
 uint32_t last_frame_ms = 0;
 uint32_t last_heartbeat_ms = 0;
 bool person_seen = false;
 uint32_t button_down_ms = 0;
 
+// Manual re-capture (BOOT button): trusts the user that the seat is empty.
 bool capture_baseline() {
   // Discard a few frames so auto exposure settles.
   for (int i = 0; i < 5; i++) {
@@ -33,7 +37,9 @@ bool capture_baseline() {
   }
   memcpy(baseline, fb->buf, kPixels);
   esp_camera_fb_return(fb);
-  Serial.println("baseline captured (seat should be empty)");
+  baseline_ready = true;
+  last_refresh_ms = millis();
+  Serial.println("# baseline captured by button (seat should be empty)");
   return true;
 }
 
@@ -98,7 +104,9 @@ void setup() {
     delay(3000);
     ESP.restart();
   }
-  while (!capture_baseline()) delay(500);
+  // No baseline yet: until the seat is seen empty, belongings cannot be judged (diff = 0),
+  // but people are still detected. Powering on while seated no longer poisons the baseline.
+  Serial.println("# waiting for an empty seat to take the baseline");
   connect_wifi();
 }
 
@@ -119,13 +127,34 @@ void loop() {
   uint32_t t0 = millis();
   float score = detector::person_score(fb->buf);
   uint32_t infer_ms = millis() - t0;
-  float diff = seat::diff_ratio(fb->buf, baseline, kPixels, PIXEL_THRESHOLD);
-  esp_camera_fb_return(fb);
-  if (score < 0) return;
-
+  if (score < 0) {
+    esp_camera_fb_return(fb);
+    return;
+  }
   person_seen = seat::person_present(score, person_seen, PERSON_ON, PERSON_OFF);
+
+  if (!baseline_ready) {
+    clear_frames = person_seen || score >= PERSON_OFF ? 0 : clear_frames + 1;
+    if (clear_frames >= BASELINE_CLEAR_FRAMES) {
+      memcpy(baseline, fb->buf, kPixels);
+      baseline_ready = true;
+      last_refresh_ms = millis();
+      Serial.println("# baseline captured (no person for a few frames)");
+    }
+  }
+  float diff = baseline_ready ? seat::diff_ratio(fb->buf, baseline, kPixels, PIXEL_THRESHOLD) : 0.0f;
   seat::State observed = seat::classify(person_seen, diff, DIFF_THRESHOLD);
   seat::Event ev = tracker.update(observed, millis());
+
+  if (baseline_ready && seat::should_refresh_baseline(tracker.state(), observed,
+                                                      millis() - tracker.since_ms(),
+                                                      millis() - last_refresh_ms,
+                                                      BASELINE_MIN_EMPTY_MS, BASELINE_REFRESH_MS)) {
+    memcpy(baseline, fb->buf, kPixels);  // follow slow lighting drift while the seat is empty
+    last_refresh_ms = millis();
+    Serial.println("# baseline refreshed (seat empty)");
+  }
+  esp_camera_fb_return(fb);
 
   // label:value pairs so the Arduino IDE Serial Plotter can graph them (all on a 0..1 scale).
   // seat: 1 = occupied, 0.5 = away, 0 = empty.

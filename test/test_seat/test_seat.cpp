@@ -35,6 +35,19 @@ void test_person_hysteresis() {
   TEST_ASSERT_FALSE(present);
 }
 
+void test_baseline_refresh_only_when_empty() {
+  const uint32_t min_empty = 120000, interval = 300000;
+  TEST_ASSERT_TRUE(seat::should_refresh_baseline(State::Empty, State::Empty, 130000, 400000, min_empty, interval));
+  // never with someone (or their bag) in view
+  TEST_ASSERT_FALSE(seat::should_refresh_baseline(State::Occupied, State::Occupied, 900000, 900000, min_empty, interval));
+  TEST_ASSERT_FALSE(seat::should_refresh_baseline(State::Away, State::Away, 900000, 900000, min_empty, interval));
+  // empty, but this frame looks different (someone walking in): wait
+  TEST_ASSERT_FALSE(seat::should_refresh_baseline(State::Empty, State::Away, 900000, 900000, min_empty, interval));
+  // just became empty, or refreshed recently
+  TEST_ASSERT_FALSE(seat::should_refresh_baseline(State::Empty, State::Empty, 60000, 900000, min_empty, interval));
+  TEST_ASSERT_FALSE(seat::should_refresh_baseline(State::Empty, State::Empty, 900000, 100000, min_empty, interval));
+}
+
 void test_diff_identical_is_zero() {
   memset(base, 100, N);
   memcpy(frame, base, N);
@@ -150,6 +163,7 @@ int main() {
   UNITY_BEGIN();
   RUN_TEST(test_classify);
   RUN_TEST(test_person_hysteresis);
+  RUN_TEST(test_baseline_refresh_only_when_empty);
   RUN_TEST(test_diff_identical_is_zero);
   RUN_TEST(test_diff_ignores_global_brightness);
   RUN_TEST(test_diff_detects_object);

@@ -43,6 +43,12 @@ bool person_present(float score, bool was_present, float on_threshold, float off
   return was_present ? score >= off_threshold : score >= on_threshold;
 }
 
+bool should_refresh_baseline(State state, State observed, uint32_t in_state_ms,
+                             uint32_t since_refresh_ms, uint32_t min_empty_ms, uint32_t interval_ms) {
+  return state == State::Empty && observed == State::Empty && in_state_ms >= min_empty_ms &&
+         since_refresh_ms >= interval_ms;
+}
+
 State classify(bool person, float diff_ratio, float diff_threshold) {
   if (person) return State::Occupied;
   return diff_ratio > diff_threshold ? State::Away : State::Empty;

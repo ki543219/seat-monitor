@@ -21,5 +21,8 @@
 #define CONFIRM_FRAMES 4        // frames in a row before a state change is accepted (~2 s)
 #define LEAVE_FRAMES 20         // frames without a person before leaving occupied (~10 s)
 #define FRAME_INTERVAL_MS 500
+#define BASELINE_CLEAR_FRAMES 6              // frames with nobody before the first baseline (~3 s)
+#define BASELINE_MIN_EMPTY_MS (2UL * 60 * 1000)   // seat empty this long before a refresh
+#define BASELINE_REFRESH_MS (5UL * 60 * 1000)     // at most one refresh per 5 min
 #define AWAY_ALERT_MS (30UL * 60 * 1000)  // absence before alert: 30 min; e.g. 60 s for a demo
 #define HEARTBEAT_MS (60UL * 1000)        // liveness row for the status page
