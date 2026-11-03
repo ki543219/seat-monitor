@@ -1,4 +1,6 @@
 .pio/
 .vscode/
 include/secrets.h
+# gesture photos may show faces: keep them local, never in the public repo
+data/
 __pycache__/

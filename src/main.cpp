@@ -15,6 +15,7 @@ constexpr int kBootButton = 0;  // hold BOOT for 1 s to re-capture the empty-sea
 uint8_t* baseline = nullptr;
 seat::Tracker tracker({CONFIRM_FRAMES, AWAY_ALERT_MS});
 uint32_t last_frame_ms = 0;
+uint32_t last_heartbeat_ms = 0;
 uint32_t button_down_ms = 0;
 
 bool capture_baseline() {
@@ -124,13 +125,23 @@ void loop() {
   seat::State observed = seat::classify(score > PERSON_THRESHOLD, diff, DIFF_THRESHOLD);
   seat::Event ev = tracker.update(observed, millis());
 
-  Serial.printf("person=%.2f diff=%.2f obs=%-8s state=%-8s infer=%lums queue=%u\n", score, diff,
-                seat::to_string(observed), seat::to_string(tracker.state()),
-                (unsigned long)infer_ms, (unsigned)uploader::pending());
+  // label:value pairs so the Arduino IDE Serial Plotter can graph them (all on a 0..1 scale).
+  // seat: 1 = occupied, 0.5 = away, 0 = empty.
+  const seat::State st = tracker.state();
+  Serial.printf("person:%.2f diff:%.2f person_threshold:%.2f diff_threshold:%.2f seat:%.1f\n", score,
+                diff, PERSON_THRESHOLD, DIFF_THRESHOLD,
+                st == seat::State::Occupied ? 1.0f : st == seat::State::Away ? 0.5f : 0.0f);
 
   if (ev.kind != seat::Event::Kind::None) {
-    Serial.printf(">> event %s -> %s (%lus)\n", seat::to_string(ev.from), seat::to_string(ev.to),
+    Serial.printf("# event %s -> %s (%lus)\n", seat::to_string(ev.from), seat::to_string(ev.to),
                   (unsigned long)(ev.duration_ms / 1000));
     uploader::push({ev, now_unix(), score, diff});
+  }
+
+  if (millis() - last_heartbeat_ms >= HEARTBEAT_MS || last_heartbeat_ms == 0) {
+    last_heartbeat_ms = millis();
+    bool ok = uploader::heartbeat(st, score, diff);
+    Serial.printf("# heartbeat %s, state %s, infer %lums, queue %u\n", ok ? "sent" : "failed",
+                  seat::to_string(st), (unsigned long)infer_ms, (unsigned)uploader::pending());
   }
 }

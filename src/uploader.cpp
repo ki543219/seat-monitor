@@ -40,23 +40,34 @@ String to_json(const Record& r) {
   return String(buf);
 }
 
-bool post(const Record& r) {
+bool post(const char* table, const String& body) {
   WiFiClientSecure client;
   client.setInsecure();  // demo only: pin the Supabase root CA for real deployments
   HTTPClient http;
-  if (!http.begin(client, String(SUPABASE_URL) + "/rest/v1/seat_events")) return false;
+  if (!http.begin(client, String(SUPABASE_URL) + "/rest/v1/" + table)) return false;
   http.addHeader("Content-Type", "application/json");
   http.addHeader("apikey", SUPABASE_KEY);
   http.addHeader("Authorization", String("Bearer ") + SUPABASE_KEY);
   http.addHeader("Prefer", "return=minimal");
   http.setTimeout(8000);
-  int code = http.POST(to_json(r));
-  if (code != 201) Serial.printf("upload failed: HTTP %d %s\n", code, http.getString().c_str());
+  int code = http.POST(body);
+  if (code != 201) Serial.printf("upload to %s failed: HTTP %d %s\n", table, code, http.getString().c_str());
   http.end();
   return code == 201;
 }
 
 }  // namespace
+
+bool heartbeat(seat::State state, float person_score, float diff_ratio) {
+  if (WiFi.status() != WL_CONNECTED) return false;
+  char buf[256];
+  snprintf(buf, sizeof(buf),
+           "{\"device_id\":\"%s\",\"seat_id\":\"%s\",\"state\":\"%s\",\"person_score\":%.3f,"
+           "\"diff_ratio\":%.3f,\"rssi\":%d,\"uptime_s\":%lu,\"queue\":%u,\"fw_version\":\"%s\"}",
+           DEVICE_ID, SEAT_ID, seat::to_string(state), person_score, diff_ratio, (int)WiFi.RSSI(),
+           (unsigned long)(millis() / 1000), (unsigned)count, FW_VERSION);
+  return post("heartbeats", String(buf));
+}
 
 void push(const Record& r) {
   if (count == kCapacity) {  // drop the oldest
@@ -70,7 +81,7 @@ void push(const Record& r) {
 void tick() {
   if (count == 0 || WiFi.status() != WL_CONNECTED) return;
   if (failed_before && millis() - last_fail_ms < kRetryMs) return;
-  if (post(queue[head])) {
+  if (post("seat_events", to_json(queue[head]))) {
     head = (head + 1) % kCapacity;
     count--;
     failed_before = false;

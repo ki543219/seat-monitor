@@ -17,5 +17,7 @@ void push(const Record& r);
 // Sends at most one queued record. Call every loop.
 void tick();
 size_t pending();
+// Posts a liveness row (not queued: only the latest one matters).
+bool heartbeat(seat::State state, float person_score, float diff_ratio);
 
 }  // namespace uploader

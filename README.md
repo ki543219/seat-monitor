@@ -1,5 +1,7 @@
 # Seat Monitor — ESP32-S3 자리 비움 감지
 
+[![CI](https://github.com/ki543219/seat-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/ki543219/seat-monitor/actions/workflows/ci.yml) · [상태 페이지](https://ki543219.github.io/seat-monitor/) · [예시 데이터](https://ki543219.github.io/seat-monitor/?demo)
+
 책상 위 ESP32-S3 카메라가 **자리에 있음 / 짐만 두고 자리 비움 / 빈 자리**를 기기 안에서 판단하고, 상태 변화와 머문 시간을 Supabase DB에 기록합니다. 영상은 기기 밖으로 나가지 않고 판정 결과만 전송됩니다.
 
 같은 기기를 두 곳에 씁니다.
@@ -29,8 +31,14 @@ CI는 실제로 버그를 잡았습니다. 첫 커밋에서 짐 감지의 밝기
 
 ## 상태 페이지
 `docs/index.html` (GitHub Pages: Settings → Pages → `main` / `/docs`)
-- 현재 상태와 실시간 타이머, 오늘 요약(앉아 있던 시간, 자리 비움 시간·횟수, 집중 유지율), 오늘 타임라인, 최근 기록
+- **개인**: 현재 상태와 실시간 타이머, 오늘 요약(앉아 있던 시간, 자리 비움, 집중 유지율), 오늘 목표 진행률, 공부 잔디(12주)와 연속 달성일, 오늘 타임라인, 최근 기록
+- **도서관** (`?mode=library`): 좌석 현황 요약과 실제 이용률, 열람실 좌석 지도, 오래 비운 순 자리 비움 목록
+- 기기 연결 상태 (1분마다 보내는 heartbeat 기준)
 - 예시 데이터로 보기: `?demo` (기기 없이 발표용)
+
+장시간 자리 비움 알림은 짐이 보이는지와 상관없이 **사람이 떠난 지 30분**이 지나면 발생합니다. 짐이 카메라에 안 잡히는 경우(바닥의 가방 등)도 놓치지 않기 위해서이고, 알림에는 짐이 보였는지가 함께 기록됩니다.
+
+Arduino IDE의 **시리얼 플로터**(115200 baud)로 사람 점수, 짐 감지 값, 기준선, 좌석 상태를 실시간 그래프로 볼 수 있습니다.
 - 전체: https://ki543219.github.io/seat-monitor/
 - 배지 모드 `?badge=desk-01`: 한 좌석 상태만 화면 가득 표시합니다. 화면 공유나 OBS 가상 카메라용입니다.
 

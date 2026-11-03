@@ -17,4 +17,5 @@
 #define DIFF_THRESHOLD 0.08f    // changed-pixel fraction above this = something on the seat
 #define CONFIRM_FRAMES 4        // frames in a row before a state change is accepted
 #define FRAME_INTERVAL_MS 500
-#define AWAY_ALERT_MS (30UL * 60 * 1000)  // 30 min; set to e.g. 60 s for a demo
+#define AWAY_ALERT_MS (30UL * 60 * 1000)  // absence before alert: 30 min; e.g. 60 s for a demo
+#define HEARTBEAT_MS (60UL * 1000)        // liveness row for the status page

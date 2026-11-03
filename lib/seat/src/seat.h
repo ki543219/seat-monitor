@@ -24,7 +24,8 @@ State classify(bool person, float diff_ratio, float diff_threshold);
 
 struct Config {
   uint8_t confirm_frames;  // identical observations in a row needed to change state
-  uint32_t away_alert_ms;  // Away longer than this raises one AwayTooLong event
+  uint32_t away_alert_ms;  // absence (person left, with or without belongings) longer than
+                           // this raises one AwayTooLong event
 };
 
 struct Event {
@@ -32,7 +33,7 @@ struct Event {
   Kind kind = Kind::None;
   State from = State::Unknown;
   State to = State::Unknown;
-  uint32_t duration_ms = 0;  // time spent in `from` (Changed) or in Away so far (AwayTooLong)
+  uint32_t duration_ms = 0;  // time spent in `from` (Changed) or absent so far (AwayTooLong)
 };
 
 // Debounces per-frame observations into stable states and emits events.
@@ -49,6 +50,8 @@ class Tracker {
   uint32_t since_ms_ = 0;
   State candidate_ = State::Unknown;
   uint8_t candidate_count_ = 0;
+  bool absent_ = false;  // person left the seat and has not come back
+  uint32_t absent_since_ms_ = 0;
   bool alerted_ = false;
 };
 

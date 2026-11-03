@@ -66,11 +66,13 @@ void test_tracker_changes_after_confirm_frames() {
 
 void test_tracker_away_alert_fires_once() {
   seat::Tracker t({1, 30000});
-  t.update(State::Away, 1000);
+  t.update(State::Occupied, 0);
+  t.update(State::Away, 1000);  // left belongings and walked away
   TEST_ASSERT_EQUAL(Event::Kind::None, t.update(State::Away, 20000).kind);
 
   Event ev = t.update(State::Away, 31000);
   TEST_ASSERT_EQUAL(Event::Kind::AwayTooLong, ev.kind);
+  TEST_ASSERT_EQUAL(State::Away, ev.to);
   TEST_ASSERT_EQUAL_UINT32(30000, ev.duration_ms);
   TEST_ASSERT_EQUAL(Event::Kind::None, t.update(State::Away, 40000).kind);
 
@@ -78,6 +80,31 @@ void test_tracker_away_alert_fires_once() {
   t.update(State::Occupied, 41000);
   t.update(State::Away, 42000);
   TEST_ASSERT_EQUAL(Event::Kind::AwayTooLong, t.update(State::Away, 72000).kind);
+}
+
+void test_tracker_alert_without_visible_belongings() {
+  // Belongings may be out of the camera's view; absence alone must raise the alert.
+  seat::Tracker t({1, 30000});
+  t.update(State::Occupied, 0);
+  t.update(State::Empty, 5000);
+  Event ev = t.update(State::Empty, 35000);
+  TEST_ASSERT_EQUAL(Event::Kind::AwayTooLong, ev.kind);
+  TEST_ASSERT_EQUAL(State::Empty, ev.to);
+  TEST_ASSERT_EQUAL_UINT32(30000, ev.duration_ms);
+}
+
+void test_tracker_absence_spans_away_and_empty() {
+  seat::Tracker t({1, 30000});
+  t.update(State::Occupied, 0);
+  t.update(State::Away, 10000);   // left with bag on the seat
+  t.update(State::Empty, 25000);  // someone moved the bag: still the same absence
+  TEST_ASSERT_EQUAL(Event::Kind::AwayTooLong, t.update(State::Empty, 40000).kind);
+}
+
+void test_tracker_no_alert_if_never_occupied() {
+  seat::Tracker t({1, 30000});
+  t.update(State::Empty, 0);
+  TEST_ASSERT_EQUAL(Event::Kind::None, t.update(State::Empty, 3600000).kind);
 }
 
 int main() {
@@ -89,5 +116,8 @@ int main() {
   RUN_TEST(test_tracker_ignores_single_glitch);
   RUN_TEST(test_tracker_changes_after_confirm_frames);
   RUN_TEST(test_tracker_away_alert_fires_once);
+  RUN_TEST(test_tracker_alert_without_visible_belongings);
+  RUN_TEST(test_tracker_absence_spans_away_and_empty);
+  RUN_TEST(test_tracker_no_alert_if_never_occupied);
   return UNITY_END();
 }

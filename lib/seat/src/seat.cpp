@@ -60,20 +60,28 @@ Event Tracker::update(State observed, uint32_t now_ms) {
       ev.from = state_;
       ev.to = observed;
       ev.duration_ms = state_ == State::Unknown ? 0 : now_ms - since_ms_;
+      // An absence starts when the person leaves; moving between Away and Empty
+      // (belongings taken or left) does not restart it.
+      if (observed == State::Occupied) {
+        absent_ = false;
+      } else if (state_ == State::Occupied) {
+        absent_ = true;
+        absent_since_ms_ = now_ms;
+        alerted_ = false;
+      }
       state_ = observed;
       since_ms_ = now_ms;
       candidate_count_ = 0;
-      alerted_ = false;
       return ev;
     }
   }
 
-  if (state_ == State::Away && !alerted_ && now_ms - since_ms_ >= cfg_.away_alert_ms) {
+  if (absent_ && !alerted_ && now_ms - absent_since_ms_ >= cfg_.away_alert_ms) {
     alerted_ = true;
     ev.kind = Event::Kind::AwayTooLong;
-    ev.from = State::Away;
-    ev.to = State::Away;
-    ev.duration_ms = now_ms - since_ms_;
+    ev.from = state_;
+    ev.to = state_;  // Away: belongings still on the seat, Empty: left without them
+    ev.duration_ms = now_ms - absent_since_ms_;
   }
   return ev;
 }
