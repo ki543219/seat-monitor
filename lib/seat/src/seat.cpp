@@ -14,13 +14,22 @@ const char* to_string(State s) {
 float diff_ratio(const uint8_t* frame, const uint8_t* baseline, size_t n,
                  uint8_t pixel_threshold) {
   if (n == 0) return 0.0f;
-  int64_t sum_f = 0, sum_b = 0;
+  // Compensate global lighting changes with the median pixel difference. Unlike the mean,
+  // the median is not pulled by an object as long as it covers less than half the view.
+  static uint32_t hist[511];
+  for (uint32_t& h : hist) h = 0;
   for (size_t i = 0; i < n; i++) {
-    sum_f += frame[i];
-    sum_b += baseline[i];
+    hist[static_cast<int>(frame[i]) - static_cast<int>(baseline[i]) + 255]++;
   }
-  // Compensate global lighting changes so only local changes count.
-  const int offset = static_cast<int>((sum_f - sum_b) / static_cast<int64_t>(n));
+  int offset = 0;
+  size_t acc = 0;
+  for (int d = 0; d < 511; d++) {
+    acc += hist[d];
+    if (acc > n / 2) {
+      offset = d - 255;
+      break;
+    }
+  }
   size_t changed = 0;
   for (size_t i = 0; i < n; i++) {
     int d = static_cast<int>(frame[i]) - static_cast<int>(baseline[i]) - offset;

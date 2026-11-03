@@ -15,7 +15,7 @@ enum class State : uint8_t {
 const char* to_string(State s);
 
 // Fraction (0..1) of pixels that differ from the baseline by more than
-// pixel_threshold, after removing the overall brightness difference.
+// pixel_threshold, after removing the overall (median) brightness difference.
 float diff_ratio(const uint8_t* frame, const uint8_t* baseline, size_t n,
                  uint8_t pixel_threshold);
 
