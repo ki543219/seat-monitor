@@ -53,6 +53,22 @@ time_t now_unix() {
   return t > 1700000000 ? t : 0;  // 0 until NTP has synced
 }
 
+// Dataset collection (tools/capture.py): host sends 'F', device replies "FRM0" + raw 96x96 pixels.
+void serve_frame_request() {
+  bool requested = false;
+  while (Serial.available()) {
+    if (Serial.read() == 'F') requested = true;
+  }
+  if (!requested) return;
+  camera_fb_t* fb = esp_camera_fb_get();
+  if (!fb) return;
+  if (fb->len == kPixels) {
+    Serial.write(reinterpret_cast<const uint8_t*>("FRM0"), 4);
+    Serial.write(fb->buf, kPixels);
+  }
+  esp_camera_fb_return(fb);
+}
+
 void check_button() {
   if (digitalRead(kBootButton) == LOW) {
     if (button_down_ms == 0) button_down_ms = millis();
@@ -85,6 +101,7 @@ void setup() {
 }
 
 void loop() {
+  serve_frame_request();
   check_button();
   uploader::tick();
 
