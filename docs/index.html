@@ -201,7 +201,7 @@ const SUPABASE_KEY = "sb_publishable__OgkuoZJ0eeN8WluGW_MnA_r-Uy7p2N";
 const REFRESH_MS = 5000;
 const HISTORY_DAYS = 84;        // 12 weeks for the heatmap
 const ABSENCE_ALERT_MIN = 30;   // matches AWAY_ALERT_MS in firmware
-const ONLINE_WITHIN_MS = 150000;
+const ONLINE_WITHIN_MS = 95000;   // heartbeat every 60 s, plus slack for a slow upload
 const DAY = 86400000, HOUR = 3600000, MIN = 60000;
 
 const LABEL = { occupied: "자리에 있음", away: "자리 비움", empty: "빈 자리", unknown: "확인 중" };
@@ -247,13 +247,22 @@ async function load() {
   return { ev, hb };
 }
 
+// Time of the seat's last heartbeat if its device has gone quiet, else null.
+// Without heartbeats (older data) the device is assumed alive.
+function offlineSince(seat) {
+  const b = beats.find(x => x.seat_id === seat);
+  return b && Date.now() - ms(b.ts) > ONLINE_WITHIN_MS ? ms(b.ts) : null;
+}
+
 // State timeline of one seat: [{state, from, to}] from 'changed' events, oldest first.
+// The last state lasts until now, or until the last heartbeat if the device is off.
 function segments(seat) {
   const ch = events.filter(e => e.seat_id === seat && e.kind === "changed").reverse();
-  const now = Date.now(), out = [];
+  const end = offlineSince(seat) ?? Date.now(), out = [];
   ch.forEach((e, i) => {
     if (e.to_state === "unknown") return;
-    out.push({ state: e.to_state, from: ms(e.ts), to: i + 1 < ch.length ? ms(ch[i + 1].ts) : now });
+    const from = ms(e.ts), to = i + 1 < ch.length ? ms(ch[i + 1].ts) : Math.max(from, end);
+    out.push({ state: e.to_state, from, to });
   });
   return out;
 }
@@ -273,8 +282,9 @@ function seatInfo(seat) {
   const lastAlert = events.find(e => e.seat_id === seat && e.kind === "away_too_long");
   const alert = absentSince !== null && lastAlert && ms(lastAlert.ts) >= absentSince;
   const study = events.find(e => e.seat_id === seat && (e.kind === "study_start" || e.kind === "study_stop"));
-  return { seat, segs, state, since: cur ? cur.from : null, absentSince, alert,
-           studying: study && study.kind === "study_start" ? ms(study.ts) : null };
+  const off = offlineSince(seat);
+  return { seat, segs, state, since: cur ? cur.from : null, absentSince: off ? null : absentSince, alert: !off && alert,
+           offline: off, studying: !off && study && study.kind === "study_start" ? ms(study.ts) : null };
 }
 
 /* ---------- demo data ---------- */
@@ -339,16 +349,19 @@ function personal() {
 
   return `<div class="stack">
     <section class="hero">
-      <article class="card status s-${info.state}" aria-live="polite">
+      <article class="card status s-${info.offline ? "unknown" : info.state}" aria-live="polite">
         <div class="seat"><span>${esc(selected)}</span>${picker}</div>
-        <div>
+        ${info.offline ? `<div>
+          <div class="state"><i></i>기기 꺼짐</div>
+          <div class="since" style="margin-top:10px">마지막 상태: ${LABEL[info.state]} · ${hm(info.offline)} 이후 신호 없음</div>
+        </div>` : `<div>
           <div class="state"><i></i>${LABEL[info.state]}</div>
           <div class="timer num" data-since="${info.since ?? ""}" data-fmt="clock">${info.since ? clock(now - info.since) : "–"}</div>
-        </div>
+        </div>`}
         <div style="display:flex;flex-direction:column;gap:8px">
           ${info.studying ? `<span class="badge-study">✋ 공부 타이머 <span class="num" data-since="${info.studying}" data-fmt="clock"></span></span>` : ""}
           ${info.alert ? `<span class="badge-alert">⚠ ${ABSENCE_ALERT_MIN}분 넘게 자리 비움</span>` : ""}
-          <span class="since">${info.since ? `${hm(info.since)}부터` : ""}</span>
+          <span class="since">${info.since && !info.offline ? `${hm(info.since)}부터` : ""}</span>
         </div>
       </article>
       <div class="tiles">
@@ -475,7 +488,7 @@ function library() {
   const seats = [...new Set(events.map(e => e.seat_id))].sort();
   if (!seats.length) return emptyState();
   const now = Date.now(), infos = seats.map(seatInfo);
-  const n = st => infos.filter(i => i.state === st).length;
+  const n = st => infos.filter(i => !i.offline && i.state === st).length;
   const occ = n("occupied"), away = n("away"), empty = n("empty") + n("unknown");
   const held = occ + away;
   const absent = infos.filter(i => i.absentSince !== null).sort((a, b) => a.absentSince - b.absentSince);
@@ -489,11 +502,11 @@ function library() {
     <section class="card">
       <div class="card-head"><h2>열람실 좌석</h2>${legend()}</div>
       <div class="seats">${infos.map(i => `
-        <div class="seat-tile s-${i.state}${i.alert ? " alert" : ""}${i.seat === "desk-01" ? " mine" : ""}" title="${esc(i.seat)} · ${LABEL[i.state]}">
+        <div class="seat-tile s-${i.offline ? "unknown" : i.state}${i.alert ? " alert" : ""}${i.seat === "desk-01" ? " mine" : ""}" title="${esc(i.seat)} · ${i.offline ? "기기 꺼짐" : LABEL[i.state]}">
           <span class="bar-top"></span>${i.alert ? '<span class="warn">⚠ 장시간</span>' : ""}
           <span class="id">${esc(i.seat)}</span>
-          <span class="st">${LABEL[i.state]}</span>
-          <span class="el num" data-since="${i.absentSince ?? i.since ?? ""}" data-fmt="human"></span>
+          <span class="st">${i.offline ? "기기 꺼짐" : LABEL[i.state]}</span>
+          <span class="el num" ${i.offline ? "" : `data-since="${i.absentSince ?? i.since ?? ""}" data-fmt="human"`}></span>
         </div>`).join("")}</div>
     </section>
     <section class="card">
@@ -521,9 +534,9 @@ function emptyState() {
 /* ---------- badge ---------- */
 function badge() {
   const i = seatInfo(badgeSeat);
-  document.body.className = `badge s-${i.state}`;
-  $("badge").innerHTML = `<div class="state"><i></i>${LABEL[i.state]}</div>
-    <div class="timer num" data-since="${i.since ?? ""}" data-fmt="clock"></div>
+  document.body.className = `badge s-${i.offline ? "unknown" : i.state}`;
+  $("badge").innerHTML = `<div class="state"><i></i>${i.offline ? "기기 꺼짐" : LABEL[i.state]}</div>
+    <div class="timer num" ${i.offline ? "" : `data-since="${i.since ?? ""}" data-fmt="clock"`}></div>
     ${i.alert ? '<div class="warn">장시간 자리 비움</div>' : ""}
     <div class="seat">${esc(badgeSeat)}</div>`;
 }
