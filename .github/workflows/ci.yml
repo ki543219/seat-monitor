@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Unit tests (seat logic)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-native-${{ hashFiles('platformio.ini') }}
+      - run: pip install platformio
+      - run: pio test -e native
+
+  model:
+    name: Model check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install tflite numpy
+      - run: python tools/check_model.py model/person_detect.tflite src/model_data.cpp
+
+  firmware:
+    name: Build firmware (XIAO ESP32S3)
+    needs: [test, model]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-xiao-${{ hashFiles('platformio.ini') }}
+      - run: pip install platformio
+      - name: Build
+        env:
+          PLATFORMIO_BUILD_FLAGS: -DFW_VERSION=\"${{ github.sha }}\"
+        run: pio run -e xiao
+      - name: Check firmware size
+        run: |
+          size=$(stat -c %s .pio/build/xiao/firmware.bin)
+          echo "firmware.bin: $size bytes"
+          test "$size" -lt 3000000
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ github.sha }}
+          path: .pio/build/xiao/firmware.bin
