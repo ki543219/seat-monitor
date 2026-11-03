@@ -1,85 +1,148 @@
 # Seat Monitor — ESP32-S3 자리 비움 감지
 
-[![CI](https://github.com/ki543219/seat-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/ki543219/seat-monitor/actions/workflows/ci.yml) · [상태 페이지](https://ki543219.github.io/seat-monitor/) · [예시 데이터](https://ki543219.github.io/seat-monitor/?demo)
+[![CI](https://github.com/ki543219/seat-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/ki543219/seat-monitor/actions/workflows/ci.yml) · [상태 페이지](https://ki543219.github.io/seat-monitor/) · [예시 데이터](https://ki543219.github.io/seat-monitor/?demo) · [도서관 모드 예시](https://ki543219.github.io/seat-monitor/?demo&mode=library)
 
-책상 위 ESP32-S3 카메라가 **자리에 있음 / 짐만 두고 자리 비움 / 빈 자리**를 기기 안에서 판단하고, 상태 변화와 머문 시간을 Supabase DB에 기록합니다. 영상은 기기 밖으로 나가지 않고 판정 결과만 전송됩니다.
+책상 위 ESP32-S3 카메라가 **자리에 있음 / 짐만 두고 자리 비움 / 빈 자리**를 기기 안에서 판단하고, 상태 변화와 머문 시간을 Supabase DB에 기록합니다. **영상은 기기 밖으로 나가지 않고 판정 결과(숫자)만 전송됩니다.**
 
-같은 기기를 두 곳에 씁니다.
-- **개인 공부 기록기**: 앉아 있는 시간만 자동으로 기록합니다. 타이머 앱처럼 직접 누를 필요가 없고, 자리를 비운 시간은 빠집니다. PC나 폰 없이 동작합니다.
-- **도서관·독서실 좌석**: "짐만 두고 장시간 자리 비움"을 감지해 좌석 관리에 씁니다.
+## 왜 만들었나
+- **도서관·독서실**: 좌석 시스템은 예약과 입실만 알고 실제로 사람이 있는지는 모릅니다. 예약해 두고 짐만 둔 채 몇 시간씩 비우는 "자리 맡기"를 잡아낼 수 없습니다.
+- **개인 공부**: 타이머 앱은 직접 눌러야 해서, 깜빡하면 화장실이나 식사 시간까지 공부 시간으로 쌓입니다. 이 기기는 **앉아 있던 시간만 자동으로, 거짓 없이** 기록합니다. PC나 폰 없이 USB 전원만 있으면 됩니다.
 
-## 동작
-```
-카메라 96x96 흑백 ─┬─ Person Detection 모델 (TFLite Micro, int8) → 사람 있음?
-                   └─ 빈 자리 기준 이미지와 픽셀 비교 (밝기 보정) → 물건 있음?
-                              ▼
-          상태 판정: occupied / away / empty  (4프레임 연속일 때만 확정)
-                              ▼
-          상태 변화 + 이전 상태 지속 시간, 장시간 자리 비움(30분) 알림
-                              ▼
-          Supabase seat_events  →  상태 웹 페이지 (5초마다 갱신)
-```
+같은 기기와 같은 펌웨어를 씁니다. 좌석 이름(`SEAT_ID`)만 다르게 주면 됩니다.
 
-## 필수 조건
+## 필수 조건과 구현
 | 조건 | 구현 |
 |---|---|
-| ESP32에 모델 | `model/person_detect.tflite` (MobileNet v1 0.25, Visual Wake Words로 학습, int8, 300KB) → `src/model_data.cpp`로 펌웨어에 포함, `src/detector.cpp`에서 추론 (약 310ms) |
-| 로그를 DB에 | `src/uploader.cpp` → Supabase REST `seat_events` (Wi-Fi가 끊기면 큐에 보관 후 재전송). 스키마와 일별 요약 뷰 `seat_daily`는 `supabase/schema.sql` |
-| CI | `.github/workflows/ci.yml` (GitHub Actions, push마다 실행): 상태 로직 유닛 테스트, 모델 검사, 펌웨어 빌드, 크기 제한, 바이너리 artifact |
+| **1. ESP32에 모델** | `model/person_detect.tflite`(MobileNet v1 0.25, Visual Wake Words, int8, 300KB)를 `src/model_data.cpp` 배열로 펌웨어에 넣고, `src/detector.cpp`에서 TFLite Micro로 추론 |
+| **2. 로그를 DB에** | `src/uploader.cpp` → Supabase REST. 상태 변화(`seat_events`)와 1분 생존 신호(`heartbeats`). Wi-Fi가 끊기면 대기열에 보관했다가 재전송. 스키마는 `supabase/schema.sql` |
+| **3. CI** | `.github/workflows/ci.yml`: push마다 6개 작업 (아래 CI/CD 참고). 태그를 push하면 `release.yml`이 펌웨어를 릴리스하고, 기기가 무선으로 업데이트(CD) |
 
-CI는 실제로 버그를 잡았습니다. 첫 커밋에서 짐 감지의 밝기 보정이 평균값을 써서 큰 짐이 놓이면 화면 전체가 바뀐 것으로 잡혔고(기대 25%, 실제 100%), 유닛 테스트가 실패해 중앙값 보정으로 고쳤습니다.
+## 시스템 구조
+```
+ ┌──────────── ESP32-S3 (XIAO Sense) ────────────┐
+ │ 카메라 96x96 흑백 (2fps)                        │
+ │   ├─ Person Detection (TFLite Micro) → 사람 점수 │
+ │   └─ 빈 자리 기준 이미지와 비교 (중앙값 밝기 보정) → 짐 유무 │
+ │ 상태 판정: 사람 0.5↑ 앉음 / 0.3↓ 떠남 (히스테리시스)│
+ │            앉음 2초 확인, 떠남 10초 확인            │
+ │ 30분 넘게 비우면 알림 (짐이 보이든 안 보이든)        │
+ └──────┬──────────────────────────────┬──────────┘
+        │ HTTPS (인증서 검증) + 기기 토큰  │ 6시간마다 새 릴리스 확인
+        ▼                              ▼
+ ┌─ Supabase (Postgres) ─┐       ┌─ GitHub ──────────────────┐
+ │ seat_events           │       │ push → CI (테스트·빌드·검사) │
+ │ heartbeats (2일 보관)  │       │ tag  → Release firmware.bin│ → OTA
+ │ RLS: 토큰 있어야 쓰기   │       │ docs/ → GitHub Pages       │
+ └──────┬────────────────┘       └────────────────────────────┘
+        │ Realtime (즉시 반영)
+        ▼
+ 상태 페이지: 개인 모드 / 도서관 모드 / 배지 모드, 브라우저 알림
+```
+
+## 측정 결과
+| 항목 | 값 |
+|---|---|
+| 추론 시간 (사람 감지 1회) | 약 **313~315ms** (ESP32-S3, 240MHz) |
+| 모델 작업 메모리 (tensor arena) | **82,692 bytes** (PSRAM) |
+| 펌웨어 크기 | 약 1.29MB / 3.34MB 앱 영역 (**38.5%**) |
+| RAM (정적) | 51.5KB / 320KB (**15.7%**) |
+| 빈 자리일 때 사람 점수 | 0.05~0.14 |
+| 앉아 있을 때 사람 점수 | 0.42~0.67 (카메라 위치에 따라 다름) |
+
+**감지 정확도**: `python tools/measure.py`가 앉기 → 짐 두고 떠나기 → 짐 치우기를 안내하며 반복 측정하고, 결과를 `results/accuracy.md`에 표로 남깁니다. 측정 후 이 아래에 붙여 넣습니다.
+
+<!-- accuracy:start -->
+_아직 측정 전입니다. `python tools/measure.py 5`로 측정하세요._
+<!-- accuracy:end -->
+
+## 판정 로직에서 실제로 겪고 고친 것
+| 문제 (실제 기기에서 관찰) | 해결 | 검증 |
+|---|---|---|
+| 큰 짐이 놓이면 짐 없는 부분까지 바뀐 것으로 잡힘 (기대 25%, 실제 100%) | 밝기 보정을 평균 → 중앙값 | **CI 유닛 테스트가 처음 커밋에서 이 버그를 잡음** |
+| 앉아 있는데 점수가 0.42~0.67로 흔들려 상태가 계속 바뀜 | 기준 두 개 (앉음 0.5 / 떠남 0.3) | 실제 기록된 점수로 유닛 테스트 |
+| 모델이 잠깐 사람을 놓치면 "자리 비움"이 되어 타이머가 초기화됨 | 떠남은 10초 연속 확인 | 유닛 테스트 |
+| 앉은 채로 전원을 켜면 그 모습이 "빈 자리" 기준이 됨 | 모델로 사람이 없다고 확인된 뒤에만 기준 촬영, 빈 자리가 이어지면 기준 자동 갱신 | 유닛 테스트 |
+| 가방이 바닥에 있으면 짐이 안 보여 알림이 안 감 | 짐 유무와 상관없이 "사람이 떠난 지 30분"이면 알림 | 유닛 테스트 |
+| ESP를 뽑아도 페이지가 "자리에 있음"으로 타이머를 계속 셈 | 생존 신호가 95초 끊기면 "기기 꺼짐"으로 표시하고 기록을 멈춤 | 실제 데이터로 화면 확인 |
+
+## 보안과 개인정보
+- **영상 비전송**: 카메라 프레임은 ESP 메모리에서 판정에만 쓰고 저장하거나 전송하지 않습니다. DB에는 상태와 점수 같은 숫자만 저장됩니다.
+- **기기 토큰**: DB 쓰기는 기기별 비밀 토큰이 맞아야 허용됩니다. 공개 키만으로는 가짜 기록을 넣을 수 없습니다. DB에는 토큰의 SHA-256 해시만, API로 접근할 수 없는 `private` 스키마에 저장합니다. 수정과 삭제는 API로 불가능합니다.
+- **HTTPS 인증서 검증**: 펌웨어가 루트 인증서 번들(`src/ca_bundle.h`)로 Supabase와 GitHub 서버를 검증합니다. CI가 매번 번들로 실제 서버가 검증되는지와 만료 180일 전인지 확인합니다.
+- **비밀 정보 분리**: Wi-Fi, 키, 토큰은 git에서 제외된 `include/secrets.h`에만 있고, USB로 올릴 때 ESP 내부 저장소(NVS)에 저장됩니다. 공개 릴리스 펌웨어에는 들어가지 않습니다.
+- **사진 데이터**: 학습용 사진 폴더(`data/`)는 git에서 제외되어 있습니다.
+
+## CI/CD
+| 작업 | 내용 |
+|---|---|
+| Unit tests | 상태 판정 로직 13개 테스트 (밝기 보정, 히스테리시스, 디바운스, 장시간 부재, 기준 갱신) |
+| Model check | 모델 입출력 형식과 연산이 펌웨어와 맞는지, 300KB 예산, C 배열과 원본 일치 |
+| Database | 실제 PostgreSQL에 `schema.sql`을 **두 번** 적용(재실행 안전성)하고 접근 규칙 테스트: 토큰 없거나 틀리면 거부, 다른 기기 토큰 거부, 수정·삭제 거부, 토큰 테이블 비공개 |
+| Status page | 헤드리스 Chrome으로 개인, 도서관, 배지 화면을 렌더링해 실제로 그려지는지 확인 |
+| Trusted root CAs | 번들 만료일과 Supabase·GitHub 서버 실제 검증 |
+| Firmware | ESP32-S3 빌드, 크기 제한, 바이너리 보관 |
+| **Release (CD)** | `git tag v0.2.0 && git push --tags` → 테스트 → 릴리스 빌드 → GitHub Release에 `firmware.bin` 게시 → 기기가 6시간 안에 자동 설치 |
 
 ## 상태 페이지
-`docs/index.html` (GitHub Pages: Settings → Pages → `main` / `/docs`)
+`docs/index.html` (GitHub Pages)
 - **개인**: 현재 상태와 실시간 타이머, 오늘 요약(앉아 있던 시간, 자리 비움, 집중 유지율), 오늘 목표 진행률, 공부 잔디(12주)와 연속 달성일, 오늘 타임라인, 최근 기록
-- **도서관** (`?mode=library`): 좌석 현황 요약과 실제 이용률, 열람실 좌석 지도, 오래 비운 순 자리 비움 목록
-- 기기 연결 상태 (1분마다 보내는 heartbeat 기준)
-- 예시 데이터로 보기: `?demo` (기기 없이 발표용)
-
-장시간 자리 비움 알림은 짐이 보이는지와 상관없이 **사람이 떠난 지 30분**이 지나면 발생합니다. 짐이 카메라에 안 잡히는 경우(바닥의 가방 등)도 놓치지 않기 위해서이고, 알림에는 짐이 보였는지가 함께 기록됩니다.
-
-**로컬 뷰어** `python tools/viewer.py`: ESP32 카메라 화면과 사람 점수·화면 변화·현재 상태·기기 로그를 PC에서 실시간으로 봅니다. 카메라 위치를 잡을 때 씁니다. 화면은 메모리에서만 보여주고 저장하거나 전송하지 않습니다.
-
-Arduino IDE의 **시리얼 플로터**(115200 baud)로 사람 점수, 짐 감지 값, 기준선, 좌석 상태를 실시간 그래프로 볼 수 있습니다.
-- 전체: https://ki543219.github.io/seat-monitor/
-- 배지 모드 `?badge=desk-01`: 한 좌석 상태만 화면 가득 표시합니다. 화면 공유나 OBS 가상 카메라용입니다.
+- **도서관** (`?mode=library`): 좌석 현황과 실제 이용률, 열람실 좌석 지도, 오래 비운 순 자리 비움 목록
+- **배지** (`?badge=desk-01`): 한 좌석 상태만 화면 가득 표시합니다. 화면 공유나 OBS 가상 카메라용입니다.
+- **실시간**: Supabase Realtime으로 즉시 반영되고, 연결이 안 되면 5초마다 확인합니다. 기기 연결 상태도 보여줍니다.
+- **알림**: 🔔 버튼을 누르면 30분 넘게 자리를 비웠을 때 브라우저 알림을 띄웁니다.
+- **예시 데이터** (`?demo`): 기기 없이 발표용으로 보여줍니다.
 
 ## 구성
 ```
-src/            펌웨어 (camera, detector, uploader, main, config.h)
+src/            펌웨어: camera, detector(모델), uploader(DB), settings(NVS), ota, main, config.h, ca_bundle.h
 lib/seat/       상태 판정 로직 (하드웨어 독립, PC에서 유닛 테스트)
 test/           유닛 테스트 (Unity)
 model/          TFLite 모델
-tools/          model_to_c.py (모델→C 배열), check_model.py (CI 모델 검사), capture.py (학습 사진 수집)
-supabase/       DB 스키마
+supabase/       schema.sql, reset_demo.sql(시연 전 초기화), tests/(CI용 DB 테스트)
 docs/           상태 웹 페이지
+tools/          viewer.py      로컬 실시간 뷰어 (카메라 위치 잡기, 저장·전송 없음)
+                measure.py     감지 정확도 측정
+                new_device_token.py  기기 토큰 발급
+                make_ca_bundle.ps1 / check_ca_bundle.py  루트 인증서 번들 생성·검사
+                model_to_c.py / check_model.py  모델 → C 배열, CI 모델 검사
+                capture.py     학습 사진 수집 (로컬 전용)
 ```
 
-## 하드웨어
-Seeed XIAO ESP32S3 Sense (OV2640 카메라, 8MB PSRAM)
+## 설치
+하드웨어: Seeed XIAO ESP32S3 Sense (OV2640 카메라, 8MB PSRAM)
+1. Supabase SQL Editor에서 `supabase/schema.sql`을 실행합니다(다시 실행해도 안전).
+2. `include/secrets.example.h`를 `include/secrets.h`로 복사해 Wi-Fi(2.4GHz)와 Supabase 정보를 넣습니다.
+3. `python tools/new_device_token.py xiao-01`을 실행해 나온 `DEVICE_TOKEN` 줄을 `secrets.h`에 넣고, SQL은 Supabase에서 실행합니다.
+4. `pio run -e xiao -t upload`로 올립니다. 이때 설정이 ESP 내부 저장소에 저장되어, 이후 무선 업데이트에도 유지됩니다.
+5. 카메라는 약 1m 거리, 가슴~눈 높이에서 의자를 수평으로 보게 두고, 천장 조명이 화면에 들어오지 않게 합니다. `python tools/viewer.py`로 화면과 점수를 보며 맞춥니다.
 
-## 실행
-1. Supabase SQL Editor에서 `supabase/schema.sql` 실행
-2. `include/secrets.example.h`를 `include/secrets.h`로 복사해 Wi-Fi(2.4GHz)와 Supabase 정보 입력 (git에 올라가지 않음)
-3. `pio run -e xiao -t upload` 후 `pio device monitor`
-4. 부팅 시 자리가 비어 있는 상태로 기준 이미지를 찍음. 다시 찍으려면 BOOT 버튼 1초
+기준 사진(빈 자리)은 사람이 없다고 확인되면 자동으로 찍힙니다. 강제로 다시 찍으려면 빈 자리에서 BOOT 버튼을 1초 누릅니다. 튜닝 값은 `src/config.h`에 있습니다.
 
-튜닝 값(사람 판정 기준, 짐 감지 기준, 장시간 자리 비움 시간)은 `src/config.h`에 있습니다.
+## 시연 시나리오 (5분)
+1. 시연 전에 `supabase/reset_demo.sql`로 기록을 비웁니다.
+2. 상태 페이지를 띄우고 🔔 알림을 켭니다. 시연용으로 `AWAY_ALERT_MS`를 60초로 줄여 둡니다.
+3. **앉기** → 2초 안에 "자리에 있음"과 타이머 시작
+4. **가방을 두고 떠나기** → 10초 뒤 "자리 비움 (짐 있음)", 도서관 화면에서 주황 좌석
+5. **1분 대기** → 장시간 자리 비움 알림, 좌석에 ⚠ 표시
+6. **짐 치우기** → "빈 자리"
+7. **ESP 전원 뽑기** → 95초 안에 "기기 꺼짐"
+8. GitHub Actions에서 CI 6개 작업과, 처음 커밋에서 유닛 테스트가 실제 버그를 잡은 기록을 보여줍니다.
 
-## 테스트
-```
-pio test -e native                                                          # 상태 판정 로직
-python tools/check_model.py model/person_detect.tflite src/model_data.cpp   # 모델 검사
-```
-
-## 개발 중: 손 제스처 공부 타이머
-직접 학습한 두 번째 모델로 **손바닥 = 공부 시작, 주먹 = 종료**를 인식하고, 자리를 비우면 자동으로 일시정지해 순수 공부 시간을 기록합니다.
-- 데이터 수집: `python tools/capture.py palm 80` (ESP 카메라로 직접 촬영, `data/gesture/<label>/`)
+## 문제 해결
+| 증상 | 원인과 해결 |
+|---|---|
+| 업로드나 뷰어가 "액세스가 거부되었습니다" | Arduino IDE 시리얼 모니터나 플로터가 COM 포트를 쓰는 중입니다. 닫고 다시 시도하세요. |
+| 업로드가 "No serial data received" | USB-C 옆 B 버튼을 누른 채 R 버튼을 눌렀다 떼고 다시 시도하세요. |
+| 앉아 있는데 "빈 자리" | 카메라가 사람을 잘 못 보는 각도입니다. 뷰어로 사람 점수가 0.5 이상인지 확인하세요. |
+| 페이지가 "기기 꺼짐" | 전원이나 Wi-Fi(2.4GHz)를 확인하세요. 시리얼 로그의 `# heartbeat` 줄도 확인하세요. |
+| DB 업로드가 401/403 | 기기 토큰이 DB에 등록되지 않았거나 다릅니다. 설치 3단계를 다시 하세요. |
 
 ## 한계와 개선 방향
 | 한계 | 개선 방향 |
 |---|---|
 | 사람 유무만 알고 누구인지는 모름 | 얼굴 인식 모델 추가 (ESP32-S3에서 동작 가능) |
 | 앉아서 폰을 보는 시간도 공부로 기록됨 | 손에 든 폰 감지 모델 |
-| 조명이 크게 바뀌면 짐 감지가 흔들릴 수 있음 | 빈 자리일 때 기준 이미지 자동 갱신 |
-| 온라인 미팅은 참석자마다 기기가 필요하고, 미팅 앱과 연동되지 않음 | 웹캠 소프트웨어 버전, Zoom/Teams 상태 API 연동 |
+| 카메라 각도와 역광에 민감함 (점수 0.2까지 떨어짐) | 설치 가이드, 실제 환경 사진으로 미세 조정한 모델 |
+| 릴리스 펌웨어에 서명이 없음 | ESP-IDF Secure Boot와 서명된 OTA 이미지 |
+| 온라인 미팅은 참석자마다 기기가 필요함 | 웹캠 소프트웨어 버전, Zoom/Teams 상태 API 연동 |
+| 손 제스처 공부 타이머 (DB와 페이지는 준비됨) | 직접 학습한 두 번째 모델: 손바닥 = 시작, 주먹 = 종료 |

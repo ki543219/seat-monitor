@@ -5,6 +5,8 @@
 #include "camera.h"
 #include "config.h"
 #include "detector.h"
+#include "ota.h"
+#include "settings.h"
 #include "uploader.h"
 
 namespace {
@@ -46,7 +48,8 @@ bool capture_baseline() {
 void connect_wifi() {
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  if (!settings().valid()) return;  // no credentials: run offline, still judging the seat
+  WiFi.begin(settings().wifi_ssid.c_str(), settings().wifi_password.c_str());
   Serial.print("Wi-Fi");
   for (int i = 0; i < 40 && WiFi.status() != WL_CONNECTED; i++) {
     delay(250);
@@ -95,7 +98,9 @@ void check_button() {
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  Serial.printf("seat monitor %s, device %s, seat %s\n", FW_VERSION, DEVICE_ID, SEAT_ID);
+  settings_load();
+  Serial.printf("seat monitor %s, device %s, seat %s\n", FW_VERSION, settings().device_id.c_str(),
+                settings().seat_id.c_str());
   pinMode(kBootButton, INPUT_PULLUP);
 
   baseline = static_cast<uint8_t*>(ps_malloc(kPixels));
@@ -114,6 +119,12 @@ void loop() {
   serve_frame_request();
   check_button();
   uploader::tick();
+
+  static uint32_t next_ota_ms = OTA_FIRST_CHECK_MS;
+  if ((int32_t)(millis() - next_ota_ms) >= 0) {
+    next_ota_ms = millis() + OTA_INTERVAL_MS;
+    ota::check();  // reboots into the new firmware if one was installed
+  }
 
   if (millis() - last_frame_ms < FRAME_INTERVAL_MS) return;
   last_frame_ms = millis();

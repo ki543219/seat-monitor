@@ -51,6 +51,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);line
 @media (prefers-reduced-motion:no-preference){.pill.ok.live b{animation:pulse 2s ease-in-out infinite}}
 @keyframes pulse{50%{opacity:.35}}
 
+.notify{font:inherit;font-size:13px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);cursor:pointer}
+.notify:hover{border-color:var(--ink-2)}
 select{font:inherit;font-size:14px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
 
 .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:22px 24px;min-width:0}
@@ -186,6 +188,7 @@ body.badge #badge{display:flex;flex-direction:column;align-items:center;justify-
     <div class="pills">
       <span class="pill" id="device"><b></b><span>기기 확인 중</span></span>
       <span class="pill live" id="live"><b></b><span>연결 중…</span></span>
+      <button type="button" id="notifyBtn" class="notify" hidden>🔔 알림 켜기</button>
     </div>
   </header>
   <main id="main"></main>
@@ -194,6 +197,7 @@ body.badge #badge{display:flex;flex-direction:column;align-items:center;justify-
 <div id="badge"></div>
 <div class="tip" id="tip" role="tooltip"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
 // Publishable key: insert/select only (RLS), safe to ship in a public page.
 const SUPABASE_URL = "https://haivgsjhzpzzfctvtpht.supabase.co";
@@ -559,7 +563,7 @@ function tick() {
   const live = $("live");
   live.className = `pill live ${lastErr ? "bad" : lastOk ? "ok" : ""}`;
   live.lastElementChild.textContent = lastErr ? `서버 연결 실패 (${lastErr})`
-    : lastOk ? (DEMO ? "예시 데이터" : `실시간 · ${Math.round((now - lastOk) / 1000)}초 전 갱신`) : "연결 중…";
+    : lastOk ? (DEMO ? "예시 데이터" : realtime ? "실시간 연결됨" : `${Math.round((now - lastOk) / 1000)}초 전 갱신`) : "연결 중…";
   const dev = $("device"), b = beats[0];
   if (!b) { dev.className = "pill"; dev.lastElementChild.textContent = "기기 상태 정보 없음"; }
   else {
@@ -571,8 +575,41 @@ function tick() {
 }
 
 async function refresh() {
-  try { const d = await load(); events = d.ev; beats = d.hb; lastOk = Date.now(); lastErr = null; render(); }
+  try { const d = await load(); events = d.ev; beats = d.hb; lastOk = Date.now(); lastErr = null; notifyNew(); render(); }
   catch (err) { lastErr = err.message; tick(); }
+}
+
+/* ---------- live updates: Supabase Realtime, polling as fallback ---------- */
+let realtime = false;
+if (!DEMO && window.supabase) {
+  window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+    .channel("seat-events")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "seat_events" }, () => refresh())
+    .subscribe(status => { realtime = status === "SUBSCRIBED"; tick(); });
+}
+// With Realtime the poll only refreshes heartbeats (device online/offline).
+(function poll() { setTimeout(async () => { await refresh(); poll(); }, realtime ? 30000 : REFRESH_MS); })();
+
+/* ---------- browser notifications for long absences ---------- */
+const notified = new Set();
+let notifyPrimed = false;  // events present at first load are history, not news
+function notifyNew() {
+  const fresh = events.filter(e => e.kind === "away_too_long" && !notified.has(e.seat_id + e.ts));
+  fresh.forEach(e => notified.add(e.seat_id + e.ts));
+  if (!notifyPrimed) { notifyPrimed = true; return; }
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  for (const e of fresh) {
+    if (mode === "personal" && e.seat_id !== selected) continue;
+    new Notification(`${e.seat_id} · ${ABSENCE_ALERT_MIN}분 넘게 자리 비움`, {
+      body: e.to_state === "away" ? "짐만 두고 자리를 비웠습니다." : "짐 없이 자리를 떠났습니다 (퇴실 미처리).",
+      tag: e.seat_id,
+    });
+  }
+}
+const notifyBtn = $("notifyBtn");
+if ("Notification" in window && Notification.permission === "default" && !badgeSeat) {
+  notifyBtn.hidden = false;
+  notifyBtn.onclick = async () => { await Notification.requestPermission(); notifyBtn.hidden = true; };
 }
 
 /* ---------- interaction ---------- */
@@ -616,7 +653,6 @@ document.addEventListener("focusin", e => {
 });
 
 refresh();
-setInterval(refresh, REFRESH_MS);
 setInterval(tick, 1000);
 </script>
 </body>

@@ -5,4 +5,5 @@
 #define SUPABASE_URL "https://your-project.supabase.co"
 #define SUPABASE_KEY "your-publishable-key"  // publishable/anon key (insert-only via RLS)
 #define DEVICE_ID "xiao-01"
+#define DEVICE_TOKEN "run tools/new_device_token.py"  // write permission; keep secret
 #define SEAT_ID "desk-01"

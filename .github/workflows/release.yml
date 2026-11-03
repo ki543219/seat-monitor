@@ -1,0 +1,37 @@
+name: Release
+
+# Pushing a tag like v0.2.0 publishes firmware.bin as a GitHub Release.
+# Devices running a release build pick it up over the air (src/ota.cpp).
+# Built without secrets.h: credentials stay in each device's NVS, never in the public binary.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-xiao-${{ hashFiles('platformio.ini') }}
+      - run: pip install platformio
+      - name: Unit tests
+        run: pio test -e native
+      - name: Build release firmware
+        env:
+          PLATFORMIO_BUILD_FLAGS: -DFW_VERSION=\"${{ github.ref_name }}\"
+        run: pio run -e xiao
+      - name: Built without local credentials
+        run: test ! -f include/secrets.h  # release firmware must read credentials from NVS
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: .pio/build/xiao/firmware.bin
+          generate_release_notes: true

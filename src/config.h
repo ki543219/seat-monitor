@@ -1,10 +1,13 @@
 #pragma once
 // Wi-Fi / Supabase credentials live in include/secrets.h (git-ignored).
 // Copy include/secrets.example.h to include/secrets.h and fill it in.
+// Without it (CI and release builds) the device uses the values saved in NVS (see settings.h).
 #if __has_include("secrets.h")
 #include "secrets.h"
+#define HAVE_LOCAL_SECRETS 1
 #else
 #include "secrets.example.h"
+#define HAVE_LOCAL_SECRETS 0
 #endif
 
 #ifndef FW_VERSION
@@ -26,3 +29,8 @@
 #define BASELINE_REFRESH_MS (5UL * 60 * 1000)     // at most one refresh per 5 min
 #define AWAY_ALERT_MS (30UL * 60 * 1000)  // absence before alert: 30 min; e.g. 60 s for a demo
 #define HEARTBEAT_MS (60UL * 1000)        // liveness row for the status page
+
+// Over-the-air updates from GitHub Releases (release builds only, FW_VERSION "vX.Y.Z")
+#define OTA_REPO "https://github.com/ki543219/seat-monitor"
+#define OTA_FIRST_CHECK_MS (60UL * 1000)        // first check a minute after boot
+#define OTA_INTERVAL_MS (6UL * 60 * 60 * 1000)  // then every 6 hours

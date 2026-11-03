@@ -9,8 +9,8 @@ jobs:
     name: Unit tests (seat logic)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - uses: actions/cache@v4
@@ -24,20 +24,79 @@ jobs:
     name: Model check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - run: pip install tflite numpy
       - run: python tools/check_model.py model/person_detect.tflite src/model_data.cpp
 
-  firmware:
-    name: Build firmware (XIAO ESP32S3)
-    needs: [test, model]
+  db:
+    name: Database schema and access rules
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v5
+      - run: psql -v ON_ERROR_STOP=1 -f supabase/tests/bootstrap.sql
+      - name: Apply schema.sql
+        run: psql -v ON_ERROR_STOP=1 -f supabase/schema.sql
+      - name: Apply schema.sql again (must be idempotent)
+        run: psql -v ON_ERROR_STOP=1 -f supabase/schema.sql
+      - name: Row level security tests
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/rls_test.sql
+
+  web:
+    name: Status page renders
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - name: Render demo pages in headless Chrome
+        run: |
+          page="file://$PWD/docs/index.html"
+          for q in "?demo" "?demo&mode=library" "?demo&badge=desk-01"; do
+            google-chrome --headless=new --no-sandbox --disable-gpu --virtual-time-budget=5000 \
+              --dump-dom "$page$q" > "dom.html" 2> /dev/null
+            echo "== $q: $(wc -c < dom.html) bytes"
+            # Only patterns that exist after rendering (the script's templates contain "${").
+            case "$q" in
+              *library*) want=('class="seat-tile s-(occupied|away|empty)' 'class="tile s-occupied"') ;;
+              *badge*)   want=('<body class="badge s-(occupied|away|empty)"') ;;
+              *)         want=('class="card status s-(occupied|away|empty)"' 'class="seg s-(occupied|away|empty)"' '<i class="l[0-4]') ;;
+            esac
+            for w in "${want[@]}"; do
+              grep -Eq -- "$w" dom.html || { echo "not rendered: $w"; exit 1; }
+            done
+          done
+
+  tls:
+    name: Trusted root CAs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install cryptography
+      - run: python tools/check_ca_bundle.py
+
+  firmware:
+    name: Build firmware (XIAO ESP32S3)
+    needs: [test, model, db, tls]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - uses: actions/cache@v4
